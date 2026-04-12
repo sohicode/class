@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>포트폴리오 수행평가 관리</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f3; color: #1a1a1a; margin: 0; padding: 2rem 1rem; }
+    h1 { font-size: 18px; font-weight: 500; margin: 0 0 1rem; }
+    .container { max-width: 960px; margin: 0 auto; }
+
+    /* ── 전체 드롭존 ── */
+    .all-drop { border: 2px dashed #d0d0ce; border-radius: 12px; padding: 1rem 1.5rem; text-align: center; cursor: pointer; transition: border-color 0.15s, background 0.15s; position: relative; margin-bottom: 16px; background: #fff; }
+    .all-drop:hover    { border-color: #999; }
+    .all-drop.drag-over{ border-color: #4a90d9; background: #f0f6ff; }
+    .all-drop input[type="file"] { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+    .all-drop .ad-title { font-size: 13px; font-weight: 500; color: #555; margin: 0 0 3px; pointer-events: none; }
+    .all-drop .ad-hint  { font-size: 11px; color: #bbb; margin: 0; pointer-events: none; }
+
+    /* ── 카드 그리드 ── */
+    .section-label { font-size: 12px; font-weight: 500; color: #888; margin: 0 0 7px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+    .drop-card { background: #fff; border: 1.5px dashed #ddd; border-radius: 12px; padding: 1rem 1.25rem; cursor: pointer; transition: border-color 0.15s, background 0.15s; position: relative; }
+    .drop-card:hover     { border-color: #aaa; }
+    .drop-card.drag-over { border-color: #4a90d9; background: #f0f6ff; }
+    .drop-card.has-file  { border-style: solid; border-color: #4a90d9; }
+    .drop-card input[type="file"] { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+    .drop-card p.label  { font-size: 13px; color: #666; margin: 0 0 6px; pointer-events: none; }
+    .drop-card p.hint   { font-size: 11px; color: #bbb; margin: 4px 0 0; pointer-events: none; }
+    .drop-card p.status { font-size: 12px; color: #4a90d9; margin: 6px 0 0; min-height: 16px; pointer-events: none; word-break: break-all; }
+
+    button.primary { width: 100%; padding: 10px; font-size: 14px; font-weight: 500; cursor: pointer; background: #fff; border: 0.5px solid #bbb; border-radius: 8px; margin-bottom: 16px; margin-top: 4px; }
+    button.primary:hover { background: #f0f0ee; }
+    button.dl { font-size: 13px; padding: 6px 14px; cursor: pointer; background: #fff; border: 0.5px solid #bbb; border-radius: 8px; }
+    button.dl:hover { background: #f0f0ee; }
+    .preview-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; flex-wrap: wrap; gap: 8px; }
+    .preview-header p { font-size: 13px; color: #666; margin: 0; }
+    .hint-text { font-size: 12px; color: #999; margin: 0 0 8px; }
+    .table-wrap { overflow-x: auto; border: 0.5px solid #ddd; border-radius: 8px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: auto; }
+    th { background: #f5f5f3; color: #666; font-weight: 500; font-size: 12px; padding: 6px 10px; text-align: left; border-bottom: 0.5px solid #ddd; white-space: nowrap; }
+    td { padding: 5px 10px; border-bottom: 0.5px solid #eee; white-space: nowrap; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #fafaf8; }
+    .msg-box { border-radius: 8px; padding: 10px 14px; font-size: 13px; margin-top: 8px; display: none; }
+    .msg-box.error   { background: #fff0f0; border: 0.5px solid #f5c0c0; color: #c0392b; }
+    .msg-box.warning { background: #fffbf0; border: 0.5px solid #f5dfa0; color: #a07000; }
+    #preview { display: none; }
+    .req { color: #c0392b; }
+    .opt { color: #999; font-size: 11px; font-weight: 400; }
+    .pw-input { padding: 6px 10px; font-size: 13px; border: 0.5px solid #bbb; border-radius: 8px; width: 200px; font-family: inherit; }
+    @media (max-width: 700px) { .grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>포트폴리오 수행평가 관리</h1>
+
+  <!-- ── 전체 한꺼번에 드롭존 ── -->
+  <div class="all-drop" id="allDrop"
+       ondragover="allDragOver(event)" ondragleave="allDragLeave(event)" ondrop="allDrop(event)">
+    <input type="file" id="allFiles" accept=".csv" multiple onchange="allChange(event)" />
+    <p class="ad-title">📂 &nbsp;모든 파일을 여기에 한꺼번에 드래그 → 자동 분류</p>
+    <p class="ad-hint">명렬 · 수업보고서 · 과제체크 · 정보수업일 · 반별수업일 · 출결현황 CSV를 한번에 선택 가능</p>
+  </div>
+
+  <!-- ── 시험/과제 데이터 ── -->
+  <p class="section-label">시험/과제 데이터</p>
+  <div class="grid">
+    <div class="drop-card" id="card-roster"
+         ondragover="cardDragOver(event,'roster')" ondragleave="cardDragLeave(event,'roster')" ondrop="cardDrop(event,'roster')">
+      <input type="file" id="rosterFile" accept=".csv" onchange="cardChange('roster')" />
+      <p class="label">명렬.csv <span class="req">*</span></p>
+      <p class="hint">클릭하거나 파일을 여기로 드래그</p>
+      <p class="status" id="rosterStatus">미선택</p>
+    </div>
+    <div class="drop-card" id="card-score"
+         ondragover="cardDragOver(event,'score')" ondragleave="cardDragLeave(event,'score')" ondrop="cardDrop(event,'score')">
+      <input type="file" id="scoreFiles" accept=".csv" multiple onchange="cardChange('score')" />
+      <p class="label">시험점수.csv <span class="req">*</span> <span class="opt">(복수 가능)</span></p>
+      <p class="hint">클릭하거나 파일을 여기로 드래그</p>
+      <p class="status" id="scoreStatus">미선택</p>
+    </div>
+    <div class="drop-card" id="card-hw"
+         ondragover="cardDragOver(event,'hw')" ondragleave="cardDragLeave(event,'hw')" ondrop="cardDrop(event,'hw')">
+      <input type="file" id="hwFile" accept=".csv" onchange="cardChange('hw')" />
+      <p class="label">과제체크.csv <span class="opt">(선택)</span></p>
+      <p class="hint">클릭하거나 파일을 여기로 드래그</p>
+      <p class="status" id="hwStatus">미선택</p>
+    </div>
+  </div>
+
+  <!-- ── 결석 처리 ── -->
+  <p class="section-label">결석 처리 <span class="opt">(선택 — 3개 모두 업로드 시 자동 적용)</span></p>
+  <div class="grid">
+    <div class="drop-card" id="card-info"
+         ondragover="cardDragOver(event,'info')" ondragleave="cardDragLeave(event,'info')" ondrop="cardDrop(event,'info')">
+      <input type="file" id="infoFile" accept=".csv" onchange="cardChange('info')" />
+      <p class="label">정보수업일.csv <span class="opt">(선택)</span></p>
+      <p class="hint">클릭하거나 파일을 여기로 드래그</p>
+      <p class="status" id="infoStatus">미선택</p>
+    </div>
+    <div class="drop-card" id="card-classday"
+         ondragover="cardDragOver(event,'classday')" ondragleave="cardDragLeave(event,'classday')" ondrop="cardDrop(event,'classday')">
+      <input type="file" id="classdayFile" accept=".csv" onchange="cardChange('classday')" />
+      <p class="label">반별수업일.csv <span class="opt">(선택)</span></p>
+      <p class="hint">클릭하거나 파일을 여기로 드래그</p>
+      <p class="status" id="classdayStatus">미선택</p>
+    </div>
+    <div class="drop-card" id="card-att"
+         ondragover="cardDragOver(event,'att')" ondragleave="cardDragLeave(event,'att')" ondrop="cardDrop(event,'att')">
+      <input type="file" id="attFiles" accept=".csv" multiple onchange="cardChange('att')" />
+      <p class="label">출결현황 CSV <span class="opt">(선택, 복수 가능)</span></p>
+      <p class="hint">클릭하거나 파일을 여기로 드래그</p>
+      <p class="status" id="attStatus">미선택</p>
+    </div>
+  </div>
+
+  <button class="primary" onclick="mergeData()">포트폴리오 점수 보기</button>
+
+  <div id="preview">
+    <div class="preview-header">
+      <p id="previewLabel"></p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+        <button class="dl" onclick="downloadExcel()">Excel 다운로드 ↓</button>
+        <input type="text"     id="genSubtitle" class="pw-input" placeholder="부제목 예) 3~5주차(~4/8)" />
+        <input type="password" id="genPassword" class="pw-input" placeholder="학생확인 비밀번호 (선택)" />
+        <button class="dl" id="genBtn" onclick="generateStudentHTML()">학생확인 HTML 생성 ↓</button>
+      </div>
+    </div>
+    <p class="hint-text">※ 미리보기는 종합 시트입니다. Excel은 종합 / 시험 / 과제 3개 시트로 저장됩니다.</p>
+    <div class="table-wrap">
+      <table id="resultTable"></table>
+    </div>
+  </div>
+
+  <div class="msg-box error"   id="errorBox"></div>
+  <div class="msg-box warning" id="warnBox"></div>
+</div>
+
+<script>
+const BASE_COLS  = ['반','번호','이름','구름EDU','아이디'];
+const HW_SKIP_RE = /^(이름|이메일|그룹|종합\s*점수)/;
+
+let droppedScoreFiles = [];
+let droppedAttFiles   = [];
+let resultRows = [], examRows = [], hwRows = [];
+let examNames = [], hwColLabels = [];
+let hwTotalCount = 0, useHw = false;
+let absenceData = null;
+
+/* ── 파일명 자동 분류 ── */
+function classifyFile(name) {
+  if (name === '명렬.csv')       return 'roster';
+  if (name === '정보수업일.csv') return 'info';
+  if (name === '반별수업일.csv') return 'classday';
+  if (name === '과제체크.csv')   return 'hw';
+  if (/^\d+[._]/.test(name))     return 'score';  // 숫자_*** → 시험점수
+  if (/수업보고서/i.test(name))  return 'hw';     // 수업보고서*** → 과제체크
+  if (/출결조회|과목별출결/i.test(name)) return 'att';
+  return null;  // 분류 불가 → 드롭 무시
+}
+
+/* ── 상단 전체 드롭존 ── */
+function allDragOver(e) { e.preventDefault(); document.getElementById('allDrop').classList.add('drag-over'); }
+function allDragLeave(e){ document.getElementById('allDrop').classList.remove('drag-over'); }
+function allDrop(e)     { e.preventDefault(); document.getElementById('allDrop').classList.remove('drag-over'); distributeFiles(e.dataTransfer.files); }
+function allChange(e)   { distributeFiles(e.target.files); e.target.value=''; }
+
+function distributeFiles(fileList) {
+  const csvFiles = Array.from(fileList).filter(f => f.name.toLowerCase().endsWith('.csv'));
+  const unknown = [];
+
+  // 카테고리별 분류
+  const buckets = { roster:[], score:[], hw:[], info:[], classday:[], att:[] };
+  csvFiles.forEach(f => {
+    const cat = classifyFile(f.name);
+    if (cat) buckets[cat].push(f);
+    else unknown.push(f);
+  });
+
+  // 각 카드 input에 파일 설정
+  function setInput(id, files) {
+    if (!files.length) return;
+    const dt = new DataTransfer();
+    files.forEach(f => dt.items.add(f));
+    document.getElementById(id).files = dt.files;
+  }
+  // 단일 파일: 마지막 것으로 덮어쓰기
+  if (buckets.roster.length)   setInput('rosterFile',   [buckets.roster[buckets.roster.length-1]]);
+  if (buckets.hw.length)       setInput('hwFile',       [buckets.hw[buckets.hw.length-1]]);
+  if (buckets.info.length)     setInput('infoFile',     [buckets.info[buckets.info.length-1]]);
+  if (buckets.classday.length) setInput('classdayFile', [buckets.classday[buckets.classday.length-1]]);
+  // 복수 파일: 기존 것과 합산
+  if (buckets.score.length) {
+    const existing = Array.from(document.getElementById('scoreFiles').files);
+    const merged = mergeFileArrays(existing, buckets.score);
+    setInput('scoreFiles', merged);
+    droppedScoreFiles = merged;
+  }
+  if (buckets.att.length) {
+    const existing = Array.from(document.getElementById('attFiles').files);
+    const merged = mergeFileArrays(existing, buckets.att);
+    setInput('attFiles', merged);
+    droppedAttFiles = merged;
+  }
+
+  updateAllCards();
+
+  if (unknown.length) {
+    showWarning('분류 불가 파일 (무시됨): ' + unknown.map(f=>f.name).join(', '));
+  }
+}
+
+function mergeFileArrays(existing, incoming) {
+  const names = new Set(existing.map(f=>f.name));
+  return [...existing, ...incoming.filter(f=>!names.has(f.name))];
+}
+
+/* ── 카드별 개별 드래그앤드롭 (수동 수정용) ── */
+function cardDragOver(e,t) { e.preventDefault(); document.getElementById('card-'+t).classList.add('drag-over'); }
+function cardDragLeave(e,t){ document.getElementById('card-'+t).classList.remove('drag-over'); }
+function cardDrop(e,t) {
+  e.preventDefault();
+  document.getElementById('card-'+t).classList.remove('drag-over');
+  const files = Array.from(e.dataTransfer.files).filter(f=>f.name.toLowerCase().endsWith('.csv'));
+  if (!files.length) return;
+  if (t==='score'||t==='att') {
+    const inputId = t==='score'?'scoreFiles':'attFiles';
+    const existing = Array.from(document.getElementById(inputId).files);
+    const merged = mergeFileArrays(existing, files);
+    const dt = new DataTransfer(); merged.forEach(f=>dt.items.add(f));
+    document.getElementById(inputId).files = dt.files;
+    if (t==='score') droppedScoreFiles = merged;
+    else             droppedAttFiles   = merged;
+  } else {
+    const idMap = {roster:'rosterFile',hw:'hwFile',info:'infoFile',classday:'classdayFile'};
+    const dt = new DataTransfer(); dt.items.add(files[0]);
+    document.getElementById(idMap[t]).files = dt.files;
+  }
+  updateAllCards();
+}
+function cardChange(t) {
+  if (t==='score') droppedScoreFiles = Array.from(document.getElementById('scoreFiles').files);
+  if (t==='att')   droppedAttFiles   = Array.from(document.getElementById('attFiles').files);
+  updateAllCards();
+}
+
+/* ── 카드 UI 업데이트 ── */
+function updateAllCards() {
+  updateCard('roster',   document.getElementById('rosterFile').files[0]?.name || null, false);
+  updateCard('score',    null, document.getElementById('scoreFiles').files.length);
+  updateCard('hw',       document.getElementById('hwFile').files[0]?.name || null, false);
+  updateCard('info',     document.getElementById('infoFile').files[0]?.name || null, false);
+  updateCard('classday', document.getElementById('classdayFile').files[0]?.name || null, false);
+  updateCard('att',      null, document.getElementById('attFiles').files.length);
+}
+function updateCard(t, name, count) {
+  const card = document.getElementById('card-'+t);
+  const status = document.getElementById(t+'Status');
+  if (count > 0) {
+    const files = t==='score'
+      ? Array.from(document.getElementById('scoreFiles').files)
+      : Array.from(document.getElementById('attFiles').files);
+    status.textContent = files.length+'개: '+files.map(f=>f.name).join(', ');
+    card.classList.add('has-file');
+  } else if (name) {
+    status.textContent = name;
+    card.classList.add('has-file');
+  } else {
+    status.textContent = '미선택';
+    card.classList.remove('has-file');
+  }
+}
+/* ── 유틸 ── */
+function showError(msg){const el=document.getElementById('errorBox');el.style.display='block';el.textContent=msg;}
+function showWarning(msg){const el=document.getElementById('warnBox');el.style.display='block';el.textContent=(el.textContent?el.textContent+' / ':'')+msg;}
+function clearMessages(){['errorBox','warnBox'].forEach(id=>{const el=document.getElementById(id);el.style.display='none';el.textContent='';});}
+
+function parseCSVFile(file){
+  return new Promise(resolve=>{
+    Papa.parse(file,{header:true,skipEmptyLines:true,
+      complete:r=>resolve({name:file.name.replace(/\.csv$/i,''),filename:file.name,data:r.data,fields:r.meta.fields})});
+  });
+}
+
+/* ── 결석 파서 ── */
+function parseInfoSchedule(parsed){
+  const map={};
+  parsed.data.forEach(row=>{
+    const w=parseInt(row['주차']);
+    if(isNaN(w))return;
+    (parsed.fields||[]).forEach(k=>{
+      if(k==='주차')return;
+      const s=String(row[k]||'').trim();
+      if(s)map[s]=w;
+    });
+  });
+  return map;
+}
+
+function parseClassSchedule(parsed){
+  const map={};
+  parsed.data.forEach(row=>{
+    const ban=parseInt(row['반']),wk=parseInt(row['주차']),date=String(row['수업일']||'').trim();
+    if(!isNaN(ban)&&!isNaN(wk)&&date)map[ban+'_'+wk]=date;
+  });
+  return map;
+}
+
+function parseAttendance(parsed,filename){
+  const m=filename.match(/1학년[_\s]*(\d+)/);
+  if(!m){console.warn('반 번호 추출 실패:',filename);return {};}
+  const ban=parseInt(m[1]);
+  const dateCols=(parsed.fields||[]).filter(f=>f.includes('/')&&f.includes('교시'));
+  const att={};
+  parsed.data.forEach(row=>{
+    const num=parseInt(row['번호']);
+    if(isNaN(num))return;
+    const byDate={};
+    dateCols.forEach(col=>{
+      const date=col.split('/')[0].trim();
+      const absent=!!(row[col]&&String(row[col]).trim());
+      if(!byDate[date])byDate[date]=[];
+      byDate[date].push(absent);
+    });
+    att[ban+'_'+num]=byDate;
+  });
+  return att;
+}
+
+/* ── 메인 처리 ── */
+async function mergeData(){
+  clearMessages();
+  document.getElementById('preview').style.display='none';
+
+  const rosterFile    = document.getElementById('rosterFile').files[0];
+  const scoreFileList = document.getElementById('scoreFiles').files;
+  const hwFileInput   = document.getElementById('hwFile').files[0];
+  if(!rosterFile)         return showError('명렬.csv를 선택해주세요.');
+  if(!scoreFileList.length)return showError('시험점수 파일을 하나 이상 선택해주세요.');
+
+  /* 명렬 */
+  const roster=await parseCSVFile(rosterFile);
+  const rf=roster.fields||[];
+  const col반  =rf.find(f=>f.trim()==='반')  ||rf[0];
+  const col번호 =rf.find(f=>f.trim()==='번호') ||rf[1];
+  const col이름 =rf.find(f=>f.trim()==='이름') ||rf[2];
+  const col구름 =rf.find(f=>f.trim()==='구름EDU')||rf[3];
+  const col아이디=rf.find(f=>f.trim()==='아이디');
+  if(!col구름)return showError('명렬.csv에서 구름EDU 컬럼을 찾을 수 없습니다.');
+
+  /* 시험점수 */
+  const scoreFiles=await Promise.all(Array.from(scoreFileList).map(parseCSVFile));
+  const scoreMap={};
+  examNames=[];
+  for(const sf of scoreFiles){
+    examNames.push(sf.name);
+    const colScore=(sf.fields||[]).find(f=>/^총점수$/.test(f.trim()))
+                 ||(sf.fields||[]).find(f=>/총점/i.test(f))
+                 ||(sf.fields||[]).find(f=>/점수/i.test(f))
+                 ||(sf.fields||[]).find(f=>/score/i.test(f));
+    const colName=(sf.fields||[]).find(f=>/^이름$/.test(f.trim()));
+    if(!colName)return showError('"'+sf.name+'.csv"에서 이름 컬럼을 찾을 수 없습니다.');
+    if(!colScore)return showError('"'+sf.name+'.csv"에서 총점수 컬럼을 찾을 수 없습니다.');
+    scoreMap[sf.name]={};
+    const seen=new Set();
+    for(const row of sf.data){
+      const nm=(row[colName]||'').trim();
+      if(!nm)continue;
+      if(seen.has(nm))showWarning('"'+sf.name+'.csv" 동명이인 "'+nm+'" — 마지막 행 사용');
+      seen.add(nm);
+      scoreMap[sf.name][nm]=row[colScore]??'';
+    }
+  }
+
+  /* 과제체크 */
+  let hwRawMap={};
+  hwTotalCount=0;hwColLabels=[];useHw=false;
+  if(hwFileInput){
+    const hw=await parseCSVFile(hwFileInput);
+    const hwRawCols=(hw.fields||[]).filter(f=>!HW_SKIP_RE.test(f.trim()));
+    hwColLabels=hwRawCols.map(f=>f.trim().replace(/\s*\(\d+\)\s*$/,''));
+    hwTotalCount=hwRawCols.length;
+    for(const row of hw.data){
+      const nm=(row['이름']||'').trim();
+      if(!nm)continue;
+      const colMap={};
+      hwRawCols.forEach((rawCol,i)=>{colMap[hwColLabels[i]]=parseFloat(row[rawCol])===100?'o':'';});
+      hwRawMap[nm]=colMap;
+    }
+    useHw=hwTotalCount>0;
+    document.getElementById('hwStatus').textContent='✓ '+hw.data.length+'명 / 과제 '+hwTotalCount+'개 로드됨';
+  }
+
+  /* 결석 데이터 (선택 — 3개 모두 있을 때만 적용) */
+  absenceData=null;
+  const infoFile     =document.getElementById('infoFile').files[0];
+  const classdayFile =document.getElementById('classdayFile').files[0];
+  const attFileList  =document.getElementById('attFiles').files;
+  if(infoFile&&classdayFile&&attFileList.length>0){
+    const infoCSV    =await parseCSVFile(infoFile);
+    const classdayCSV=await parseCSVFile(classdayFile);
+    const itemToWeek =parseInfoSchedule(infoCSV);
+    const weekDate   =parseClassSchedule(classdayCSV);
+    let attendance={};
+    for(const f of Array.from(attFileList)){
+      const parsed=await parseCSVFile(f);
+      Object.assign(attendance,parseAttendance(parsed,f.name));
+    }
+    absenceData={itemToWeek,weekDate,attendance};
+  }
+
+  /* 학생별 집계 */
+  const totalExams=examNames.length;
+  resultRows=[];examRows=[];hwRows=[];
+  let absenceMarkCount=0;
+
+  roster.data.forEach(r=>{
+    const goorm   =(r[col구름]||'').trim();
+    const 아이디val=col아이디?(r[col아이디]||'').trim():'';
+    const banVal  =String(r[col반]  ||'').trim();
+    const numVal  =String(r[col번호]||'').trim();
+    const base={'반':r[col반]??'','번호':r[col번호]??'','이름':r[col이름]??'','구름EDU':goorm,'아이디':아이디val};
+
+    /* 시험 점수 */
+    const examDetail={};
+    for(const en of examNames){examDetail[en]=scoreMap[en]?.[goorm]??'';}
+
+    /* 시험 결석 마킹 */
+    if(absenceData){
+      const sAtt=absenceData.attendance[banVal+'_'+numVal];
+      if(sAtt){
+        for(const en of examNames){
+          if(examDetail[en]!=='')continue;
+          const week=absenceData.itemToWeek[en];if(!week)continue;
+          const dateStr=absenceData.weekDate[banVal+'_'+week];if(!dateStr)continue;
+          const periods=sAtt[dateStr];if(!periods||!periods.length)continue;
+          const absCnt=periods.filter(x=>x).length;if(!absCnt)continue;
+          examDetail[en]=absCnt===periods.length?'x':'△';
+          absenceMarkCount++;
+        }
+      }
+    }
+
+    /* 시험 완료 수 (x/△ 제외) */
+    let completedExams=0;
+    for(const en of examNames){
+      const v=examDetail[en];
+      if(v!==''&&v!=='x'&&v!=='△')completedExams++;
+    }
+
+    /* 과제 */
+    let completedHw=0;
+    const hwDetail={};
+    if(useHw){
+      const studentHw=hwRawMap[goorm]||{};
+      hwColLabels.forEach(lbl=>{
+        hwDetail[lbl]=studentHw[lbl]??'';
+        if(hwDetail[lbl]==='o')completedHw++;
+      });
+
+      /* 과제 결석 마킹 */
+      if(absenceData){
+        const sAtt=absenceData.attendance[banVal+'_'+numVal];
+        if(sAtt){
+          hwColLabels.forEach(lbl=>{
+            if(hwDetail[lbl]!=='')return;
+            const week=absenceData.itemToWeek[lbl];if(!week)return;
+            const dateStr=absenceData.weekDate[banVal+'_'+week];if(!dateStr)return;
+            const periods=sAtt[dateStr];if(!periods||!periods.length)return;
+            const absCnt=periods.filter(x=>x).length;if(!absCnt)return;
+            hwDetail[lbl]=absCnt===periods.length?'x':'△';
+            absenceMarkCount++;
+          });
+        }
+      }
+    }
+
+    const hasIncomplete=(completedExams<totalExams)||(useHw&&completedHw<hwTotalCount);
+    resultRows.push({...base,'총시험수':totalExams,'완료시험수':completedExams,'미완료시험수':totalExams-completedExams,...(useHw?{'총과제수':hwTotalCount,'완료과제수':completedHw,'미완료과제수':hwTotalCount-completedHw}:{}),'미수행여부':hasIncomplete?'o':''});
+    examRows.push({...base,...examDetail,'총시험수':totalExams,'완료시험수':completedExams,'미완료시험수':totalExams-completedExams});
+    if(useHw)hwRows.push({...base,...hwDetail,'총과제수':hwTotalCount,'완료과제수':completedHw,'미완료과제수':hwTotalCount-completedHw});
+  });
+
+  const unmatched=examRows.filter(r=>examNames.some(en=>r[en]==='')).length;
+  renderTable();
+  let label='총 '+resultRows.length+'명 / 시험 '+examNames.length+'개';
+  if(unmatched)label+=' / ⚠ 미매칭 '+unmatched+'명';
+  if(absenceData)label+=' / 결석 마킹 '+absenceMarkCount+'건';
+  document.getElementById('previewLabel').textContent=label;
+  document.getElementById('preview').style.display='block';
+  document.getElementById('rosterStatus').textContent='✓ '+roster.data.length+'명 로드됨';
+  document.getElementById('scoreStatus').textContent='✓ '+scoreFiles.length+'개 파일 로드됨';
+  if(absenceData)document.getElementById('attStatus').textContent='✓ 결석 마킹 완료 ('+absenceMarkCount+'건)';
+}
+
+function summaryHeaders(){return [...BASE_COLS,'총시험수','완료시험수','미완료시험수',...(useHw?['총과제수','완료과제수','미완료과제수']:[]),'미수행여부'];}
+function examHeaders()   {return [...BASE_COLS,...examNames,'총시험수','완료시험수','미완료시험수'];}
+function hwHeaders()     {return [...BASE_COLS,...hwColLabels,'총과제수','완료과제수','미완료과제수'];}
+
+function renderTable(){
+  const h=summaryHeaders();
+  document.getElementById('resultTable').innerHTML=
+    '<thead><tr>'+h.map(c=>'<th>'+c+'</th>').join('')+'</tr></thead>'+
+    '<tbody>'+resultRows.map(r=>'<tr>'+h.map(c=>'<td>'+(r[c]??'')+'</td>').join('')+'</tr>').join('')+'</tbody>';
+}
+
+function toAoa(headers,rows){
+  return[headers,...rows.map(r=>headers.map(h=>{const v=r[h]??'';const n=Number(v);return(v!==''&&!isNaN(n))?n:v;}))];
+}
+
+function downloadExcel(){
+  if(!resultRows.length)return showError('먼저 포트폴리오 점수 보기를 실행해주세요.');
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(toAoa(summaryHeaders(),resultRows)),'종합');
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(toAoa(examHeaders(),examRows)),'시험');
+  if(useHw)XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(toAoa(hwHeaders(),hwRows)),'과제');
+  const today=new Date().toISOString().slice(0,10).replace(/-/g,'');
+  XLSX.writeFile(wb,'portfolio_'+today+'.xlsx');
+}
+
+/* ── 암호화 ── */
+const SALT=new TextEncoder().encode('goorm-edu-salt-2025');
+async function deriveKey(pw){
+  const raw=await crypto.subtle.importKey('raw',new TextEncoder().encode(pw),'PBKDF2',false,['deriveKey']);
+  return crypto.subtle.deriveKey({name:'PBKDF2',salt:SALT,iterations:100000,hash:'SHA-256'},raw,{name:'AES-GCM',length:256},false,['encrypt','decrypt']);
+}
+async function hashId(pw){
+  const buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(pw));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+async function encryptRecord(pw,obj){
+  const key=await deriveKey(pw);
+  const iv=crypto.getRandomValues(new Uint8Array(12));
+  const ct=await crypto.subtle.encrypt({name:'AES-GCM',iv},key,new TextEncoder().encode(JSON.stringify(obj)));
+  const out=new Uint8Array(12+ct.byteLength);
+  out.set(iv);out.set(new Uint8Array(ct),12);
+  return btoa(String.fromCharCode(...out));
+}
+
+/* ── student-check.html 생성 ── */
+async function generateStudentHTML(){
+  if(!resultRows.length)return showError('먼저 포트폴리오 점수 보기를 실행해주세요.');
+  const btn=document.getElementById('genBtn');
+  btn.textContent='생성 중...';btn.disabled=true;
+
+  const subtitle =document.getElementById('genSubtitle').value.trim();
+  const pwInput  =document.getElementById('genPassword').value.trim();
+  let pwHash=null;
+  if(pwInput){
+    const buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(pwInput));
+    pwHash=Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+  }
+
+  const hwByGoorm={};
+  hwRows.forEach(r=>{hwByGoorm[r['구름EDU']]=r;});
+
+  const entries=[];
+  for(const r of resultRows){
+    const goorm  =r['구름EDU'];
+    const 아이디val=r['아이디']||'';
+    const examR  =examRows.find(e=>e['구름EDU']===goorm)||{};
+    const hwR    =hwByGoorm[goorm]||{};
+
+    /* 미완료 시험: 빈 칸 + x/△ 포함, 결석이면 suffix 추가 */
+    const incompleteExams=examNames
+      .filter(c=>{const v=examR[c]??'';return v===''||v==='x'||v==='△';})
+      .map(c=>{const v=examR[c]??'';return(v==='x'||v==='△')?c+' ('+v+')':c;});
+
+    /* 미완료 과제: 'o'가 아닌 것, 결석이면 suffix 추가 */
+    const incompleteTasks=hwColLabels
+      .filter(c=>(hwR[c]??'')==='o'?false:true)
+      .map(c=>{const v=hwR[c]??'';return(v==='x'||v==='△')?c+' ('+v+')':c;});
+
+    const pw=r['반']+':'+r['번호']+':'+r['이름']+':'+아이디val;
+    const id=await hashId(pw);
+    const ct=await encryptRecord(pw,{name:r['이름'],incompleteExams,incompleteTasks});
+    entries.push({id,ct});
+  }
+
+  const html=buildStudentHTML(JSON.stringify(entries),pwHash,subtitle);
+  const blob=new Blob([html],{type:'text/html;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;a.download='student-check.html';
+  document.body.appendChild(a);a.click();
+  setTimeout(()=>{URL.revokeObjectURL(url);document.body.removeChild(a);},500);
+  btn.textContent='학생확인 HTML 생성 ↓';btn.disabled=false;
+}
+
+/* ── student-check.html 템플릿 ── */
+const STUDENT_TEMPLATE = `<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>학습활동 포트폴리오</title>
+<style>
+*,*::before,*::after{box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f5f5f3;color:#1a1a1a;margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:2rem 1rem}
+.wrap{width:100%;max-width:480px}
+.title-block{text-align:center;margin:0 0 1.5rem}
+.title-block h1{font-size:18px;font-weight:600;margin:0 0 4px;color:#1a1a1a}
+.title-block .t-sub{font-size:13px;color:#4a90d9;font-weight:500;margin:0 0 2px}
+.title-block .t-extra{font-size:12px;color:#999;margin:0}
+.card{background:#fff;border:0.5px solid #ddd;border-radius:16px;padding:2rem}
+.field{margin-bottom:14px}
+.field label{display:block;font-size:12px;color:#888;margin-bottom:5px}
+.field input{width:100%;padding:9px 12px;font-size:14px;border:0.5px solid #ddd;border-radius:8px;outline:none;font-family:inherit;background:#fafaf8}
+.field input:focus{border-color:#4a90d9;background:#fff}
+button.submit{width:100%;padding:11px;font-size:14px;font-weight:500;cursor:pointer;background:#1a1a1a;color:#fff;border:none;border-radius:8px;margin-top:6px;font-family:inherit}
+button.submit:hover{background:#333}
+#result{display:none}
+.student-name{font-size:17px;font-weight:500;margin:0 0 16px;padding-bottom:14px;border-bottom:0.5px solid #eee}
+.all-done{font-size:14px;color:#2e7d4f;background:#f0faf4;border:0.5px solid #b6e8ca;border-radius:8px;padding:12px 16px}
+.section{margin-bottom:16px}
+.section-title{font-size:13px;font-weight:500;color:#555;margin:0 0 10px;display:flex;align-items:center;gap:6px}
+.section-title .count{font-size:16px;font-weight:700;color:#e0513a}
+.item-list{list-style:none;margin:0;padding:0}
+.item-list li{font-size:13px;padding:7px 10px;background:#fafaf8;border-radius:6px;margin-bottom:4px;display:flex;align-items:center;justify-content:space-between;gap:8px}
+.item-name{flex:1}
+.tag{font-size:11px;font-weight:600;border-radius:4px;padding:2px 7px;white-space:nowrap}
+.tag-x  {background:#fde8e8;color:#c0392b}
+.tag-tri{background:#fef3e2;color:#b45309}
+.tag-miss{background:#f3f4f6;color:#6b7280}
+button.back{width:100%;padding:9px;font-size:13px;cursor:pointer;background:transparent;color:#888;border:0.5px solid #ddd;border-radius:8px;margin-top:20px;font-family:inherit}
+button.back:hover{background:#f5f5f3;color:#333}
+.msg{font-size:13px;border-radius:8px;padding:10px 14px;margin-top:10px;display:none}
+.msg.error{background:#fff0f0;border:0.5px solid #f5c0c0;color:#c0392b}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="title-block">
+  <h1>학습활동 포트폴리오</h1>
+  <p class="t-sub">미완료 시험/과제 확인</p>
+  %%SUBTITLE_LINE%%
+</div>
+<div class="card">
+  %%PW_SECTION%%
+    <div id="searchForm">
+      <div class="field"><label>반</label><input type="text" id="f반" placeholder="예) 8"/></div>
+      <div class="field"><label>번호</label><input type="text" id="f번호" placeholder="예) 8"/></div>
+      <div class="field"><label>이름</label><input type="text" id="f이름" placeholder="예) 김소희"/></div>
+      <div class="field"><label>아이디</label><input type="text" id="f아이디" placeholder="예) shkim@senedu.kr"/></div>
+      <button class="submit" onclick="search()">확인하기</button>
+      <div class="msg error" id="errMsg"></div>
+    </div>
+    <div id="result">
+      <p class="student-name" id="studentName"></p>
+      <div id="resultBody"></div>
+      <button class="back" onclick="goBack()">← 다시 검색</button>
+    </div>
+  </div>
+</div>
+</div>
+<script>
+const ENTRIES=%%ENTRIES%%;
+const SALT=new TextEncoder().encode('goorm-edu-salt-2025');
+%%PW_SCRIPT%%
+async function deriveKey(pw){
+  const raw=await crypto.subtle.importKey('raw',new TextEncoder().encode(pw),'PBKDF2',false,['deriveKey']);
+  return crypto.subtle.deriveKey({name:'PBKDF2',salt:SALT,iterations:100000,hash:'SHA-256'},raw,{name:'AES-GCM',length:256},false,['decrypt']);
+}
+async function hashId(pw){
+  const buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(pw));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+async function decryptRecord(pw,b64){
+  const bin=Uint8Array.from(atob(b64),c=>c.charCodeAt(0));
+  const key=await deriveKey(pw);
+  const pt=await crypto.subtle.decrypt({name:'AES-GCM',iv:bin.slice(0,12)},key,bin.slice(12));
+  return JSON.parse(new TextDecoder().decode(pt));
+}
+async function search(){
+  const v반=document.getElementById('f반').value.trim();
+  const v번호=document.getElementById('f번호').value.trim();
+  const v이름=document.getElementById('f이름').value.trim();
+  const v아이디=document.getElementById('f아이디').value.trim();
+  const err=document.getElementById('errMsg');
+  err.style.display='none';
+  if(!v반||!v번호||!v이름||!v아이디){err.style.display='block';err.textContent='모든 항목을 입력해주세요.';return;}
+  const pw=v반+':'+v번호+':'+v이름+':'+v아이디;
+  const id=await hashId(pw);
+  const entry=ENTRIES.find(e=>e.id===id);
+  if(!entry){err.style.display='block';err.textContent='일치하는 학생 정보를 찾을 수 없습니다.';return;}
+  try{
+    const rec=await decryptRecord(pw,entry.ct);
+    showResult(rec);
+  }catch{
+    err.style.display='block';err.textContent='인증에 실패했습니다. 입력 정보를 다시 확인해주세요.';
+  }
+}
+function classify(items){
+  return items.map(function(c){
+    if(c.endsWith(' (x)')) return {name:c.slice(0,-4),type:'x',label:'전체결석'};
+    if(c.endsWith(' (\u25b3)')) return {name:c.slice(0,-4),type:'tri',label:'부분결석'};
+    return {name:c,type:'miss',label:'미제출'};
+  });
+}
+function renderList(items){
+  return '<ul class="item-list">'+classify(items).map(function(c){
+    return '<li><span class="item-name">'+c.name+'</span><span class="tag tag-'+c.type+'">'+c.label+'</span></li>';
+  }).join('')+'</ul>';
+}
+function showResult(rec){
+  document.getElementById('searchForm').style.display='none';
+  document.getElementById('result').style.display='block';
+  document.getElementById('studentName').textContent=rec.name;
+  const ie=rec.incompleteExams||[];
+  const it=rec.incompleteTasks||[];
+  if(ie.length===0&&it.length===0){
+    document.getElementById('resultBody').innerHTML='<div class="all-done">모든 시험과 과제를 완료했습니다. \uD83C\uDF89</div>';
+    return;
+  }
+  let html='';
+  if(ie.length>0)html+='<div class="section"><p class="section-title">미완료 시험 - <span class="count">'+ie.length+'개</span></p>'+renderList(ie)+'</div>';
+  if(it.length>0)html+='<div class="section"><p class="section-title">미완료 과제 - <span class="count">'+it.length+'개</span></p>'+renderList(it)+'</div>';
+  document.getElementById('resultBody').innerHTML=html;
+}
+function goBack(){
+  document.getElementById('result').style.display='none';
+  document.getElementById('searchForm').style.display='block';
+  document.getElementById('errMsg').style.display='none';
+}
+<\/script>
+</body>
+</html>`;
+
+function buildStudentHTML(entriesJSON,pwHash,subtitle){
+  const pwSection=pwHash
+    ?'<div id="pwScreen"><div class="field"><label>비밀번호</label><input type="password" id="fPw" placeholder="비밀번호를 입력하세요"/></div><button class="submit" onclick="checkPassword()">입력</button><div class="msg error" id="pwErr"></div></div><div id="mainScreen" style="display:none;">'
+    :'<div id="mainScreen">';
+  const pwScript=pwHash
+    ?'const PW_HASH=\''+pwHash+'\';async function checkPassword(){const v=document.getElementById(\'fPw\').value;const buf=await crypto.subtle.digest(\'SHA-256\',new TextEncoder().encode(v));const h=Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,\'0\')).join(\'\');if(h===PW_HASH){document.getElementById(\'pwScreen\').style.display=\'none\';document.getElementById(\'mainScreen\').style.display=\'block\';}else{const e=document.getElementById(\'pwErr\');e.style.display=\'block\';e.textContent=\'비밀번호가 올바르지 않습니다.\';}}document.addEventListener(\'keydown\',e=>{if(e.key===\'Enter\'&&document.getElementById(\'pwScreen\')&&document.getElementById(\'pwScreen\').style.display!==\'none\')checkPassword();else if(e.key===\'Enter\')search();});'
+    :'document.addEventListener(\'keydown\',e=>{if(e.key===\'Enter\')search();});';
+  const subtitleLine=subtitle?'<p class="t-extra">'+subtitle+'</p>':'';
+  return STUDENT_TEMPLATE
+    .replace('%%ENTRIES%%',entriesJSON)
+    .replace('%%PW_SECTION%%',pwSection)
+    .replace('%%PW_SCRIPT%%',pwScript)
+    .replace('%%SUBTITLE_LINE%%',subtitleLine);
+}
+</script>
+</body>
+</html>

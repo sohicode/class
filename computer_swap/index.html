@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>컴퓨터실 자리 교환</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=JetBrains+Mono:wght@400;600&display=swap');
+
+:root {
+  --bg: #0f1117;
+  --surface: #1a1d27;
+  --surface2: #22263a;
+  --border: #2e3250;
+  --accent: #4f8ef7;
+  --text: #e8eaf6;
+  --text2: #8b91b8;
+  --text3: #555a7a;
+  --radius: 10px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Noto Sans KR', sans-serif;
+  min-height: 100vh;
+  padding: 24px;
+}
+
+@media print {
+  body { background: #fff; color: #000; padding: 0; }
+  .no-print { display: none !important; }
+  .print-only { display: block !important; }
+  .seat { border: 1px solid #ccc !important; background: #fff !important; color: #000 !important; }
+  .seat-name { color: #000 !important; }
+  .seat-score { color: #444 !important; }
+  .seat-num-label { color: #999 !important; }
+  .blackboard { background: #e8f5e9 !important; color: #2e7d32 !important; border-color: #a5d6a7 !important; }
+  .aisle-label { color: #999 !important; }
+  .back-label { color: #999 !important; }
+  .seat.empty { background: #f5f5f5 !important; border-color: #ddd !important; }
+}
+
+.print-only { display: none; }
+
+h1 { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+.subtitle { color: var(--text2); font-size: 13px; margin-bottom: 24px; }
+
+/* 상단 컨트롤 */
+.controls {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.btn {
+  padding: 9px 16px;
+  border-radius: 8px;
+  border: none;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover { filter: brightness(1.1); }
+.btn-secondary { background: var(--surface2); color: var(--text2); border: 1px solid var(--border); }
+.btn-secondary:hover { border-color: var(--accent); color: var(--text); }
+.btn:disabled { opacity: 0.35; cursor: not-allowed; filter: none; }
+
+.upload-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface2);
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  padding: 9px 14px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+  transition: border-color 0.2s;
+  position: relative;
+  overflow: hidden;
+}
+.upload-btn:hover { border-color: var(--accent); }
+.upload-btn.loaded { border-color: var(--accent); border-style: solid; }
+.upload-btn input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+
+.file-status { font-size: 12px; color: var(--text3); }
+.file-status.ok { color: var(--accent); }
+
+.swap-info {
+  font-size: 12px;
+  color: var(--accent);
+  padding: 7px 14px;
+  background: rgba(79,142,247,0.08);
+  border: 1px solid rgba(79,142,247,0.25);
+  border-radius: 6px;
+  display: none;
+}
+.swap-info.visible { display: flex; align-items: center; gap: 10px; }
+.swap-info .cancel-btn { cursor: pointer; opacity: 0.6; font-size: 14px; }
+.swap-info .cancel-btn:hover { opacity: 1; }
+
+/* 배치도 영역 */
+.seating-area {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+}
+
+.seating-wrap { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+
+.blackboard {
+  width: 100%;
+  max-width: 620px;
+  background: #192e1f;
+  border: 2px solid #2a5038;
+  border-radius: 8px;
+  padding: 10px;
+  text-align: center;
+  font-size: 13px;
+  color: #5ab87a;
+  letter-spacing: 2px;
+}
+
+.seat-grid {
+  display: grid;
+  grid-template-columns: 1fr 20px 1fr 20px 1fr;
+  gap: 10px;
+  width: 100%;
+  max-width: 620px;
+}
+
+.aisle { display: flex; align-items: center; justify-content: center; }
+.aisle-label { writing-mode: vertical-rl; font-size: 10px; color: var(--text3); letter-spacing: 1px; }
+
+.col-seats { display: flex; flex-direction: column; gap: 8px; }
+.seat-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+
+.seat {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 5px 6px;
+  min-height: 68px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  position: relative;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  user-select: none;
+}
+.seat:hover { border-color: var(--accent); }
+.seat.selected {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 2px rgba(79,142,247,0.4);
+}
+.seat.empty { cursor: default; background: var(--surface); border-color: #1c2038; }
+.seat.empty:hover { border-color: #1c2038; }
+
+.seat-num-label {
+  font-size: 9px;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--text3);
+  position: absolute;
+  top: 4px; left: 5px;
+}
+.seat-name { font-size: 12px; font-weight: 500; text-align: center; color: var(--text); }
+.seat-score { font-size: 11px; font-family: 'JetBrains Mono', monospace; color: var(--text2); font-weight: 500; }
+.seat-meta { font-size: 9px; color: var(--text3); }
+
+.back-label { font-size: 12px; color: var(--text3); letter-spacing: 1px; }
+
+.msg {
+  font-size: 13px; color: var(--text2);
+  text-align: center; padding: 60px 20px; line-height: 2;
+}
+
+/* 이력 패널 */
+.history-panel {
+  margin-top: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+}
+.history-title {
+  font-size: 11px; font-weight: 700; letter-spacing: 1.2px;
+  text-transform: uppercase; color: var(--text2); margin-bottom: 10px;
+}
+.history-list {
+  display: flex; flex-direction: column; gap: 4px;
+  max-height: 120px; overflow-y: auto;
+}
+.history-list::-webkit-scrollbar { width: 4px; }
+.history-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+.history-item {
+  font-size: 12px; color: var(--text2);
+  padding: 4px 8px; background: var(--surface2);
+  border-radius: 4px; font-family: 'JetBrains Mono', monospace;
+}
+.history-empty { font-size: 12px; color: var(--text3); }
+</style>
+</head>
+<body>
+
+<h1 class="no-print">🔄 자리 교환</h1>
+<p class="subtitle no-print">computer_seating.html에서 저장한 CSV를 불러와 자리를 교환합니다</p>
+
+<!-- 컨트롤 -->
+<div class="controls no-print">
+  <label class="upload-btn" id="uploadBtn">
+    <span>📂</span>
+    <span id="uploadLabel">배치 CSV 불러오기</span>
+    <input type="file" accept=".csv" onchange="loadCSV(this)">
+  </label>
+  <span class="file-status" id="fileStatus"></span>
+
+  <div class="swap-info" id="swapInfo">
+    <span id="swapInfoText"></span>
+    <span class="cancel-btn" onclick="cancelSwap()">✕ 취소</span>
+  </div>
+
+  <div style="margin-left:auto;display:flex;gap:8px;">
+    <button class="btn btn-secondary" id="undoBtn" onclick="undoSwap()" disabled>↩ 되돌리기</button>
+    <button class="btn btn-secondary" onclick="exportCSV()" id="exportBtn" disabled>💾 CSV 저장</button>
+    <button class="btn btn-primary" onclick="printSeats()" id="printBtn" disabled>🖨️ 인쇄</button>
+  </div>
+</div>
+
+<!-- 배치도 -->
+<div class="seating-area">
+  <div class="seating-wrap" id="seatingWrap">
+    <div class="msg">배치 CSV 파일을 불러오세요</div>
+  </div>
+</div>
+
+<!-- 교환 이력 -->
+<div class="history-panel no-print" id="historyPanel" style="display:none">
+  <div class="history-title">교환 이력</div>
+  <div class="history-list" id="historyList">
+    <span class="history-empty">아직 교환 없음</span>
+  </div>
+</div>
+
+<script>
+// ── 상태 ──
+let seats       = [];     // 30 슬롯, null or {name, score, submitTime, role, seatNum, ...}
+let rawHeaders  = [];     // 원본 CSV 헤더
+let rawRows     = [];     // 원본 CSV 데이터 (이름 키로 인덱싱)
+let selectedIdx = null;
+let undoStack   = [];
+let swapHistory = [];
+let className   = '';
+
+// ── CSV 파싱 (quoted 필드 안전 처리) ──
+function parseCSV(text) {
+  const lines = text.trim().split(/\r?\n/);
+  const delim = lines[0].includes('\t') ? '\t' : ',';
+  const splitLine = (line) => {
+    if (delim === '\t') return line.split('\t').map(c => c.replace(/^"|"$/g,'').trim());
+    const cols = [];
+    let cur = '', inQ = false;
+    for (let i = 0; i < line.length; i++) {
+      const c = line[i];
+      if (c === '"') { inQ = !inQ; continue; }
+      if (c === ',' && !inQ) { cols.push(cur.trim()); cur = ''; continue; }
+      cur += c;
+    }
+    cols.push(cur.trim());
+    return cols;
+  };
+  const headers = splitLine(lines[0]).map(h => h.replace(/^"|"$/g,'').trim());
+  return {
+    headers,
+    rows: lines.slice(1).filter(l => l.trim()).map(line => {
+      const cols = splitLine(line);
+      const obj = {};
+      headers.forEach((h, i) => obj[h] = (cols[i] ?? '').replace(/^"|"$/g,'').trim());
+      return obj;
+    })
+  };
+}
+
+// ── CSV 불러오기 ──
+function loadCSV(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const { headers, rows } = parseCSV(e.target.result);
+      rawHeaders = headers;
+
+      // 컬럼 감지
+      const seatKey  = headers.find(h => /좌석/.test(h))    || headers[5];
+      const nameKey  = headers.find(h => /이름/.test(h))    || headers[2];
+      const scoreKey = headers.find(h => /총점수|점수/.test(h)) || null;
+      const timeKey  = headers.find(h => /제출/.test(h))    || null;
+      const roleKey  = headers.find(h => /멘토멘티|역할/.test(h)) || null;
+      const banKey   = headers.find(h => /^반$/.test(h))    || headers[0];
+      const numKey   = headers.find(h => /번호/.test(h))    || headers[1];
+      const cloudKey = headers.find(h => /구름|cloud/i.test(h)) || headers[3];
+
+      // 반 이름 추출
+      const banVals = [...new Set(rows.map(r => r[banKey]).filter(Boolean))];
+      className = banVals.length === 1 ? banVals[0] + '반' : banVals.join(',') + '반';
+
+      // 30자리 초기화
+      seats = new Array(30).fill(null);
+      rawRows = {};
+
+      rows.forEach(r => {
+        const seatNum = parseInt(r[seatKey]);
+        const name = (r[nameKey] || '').trim();
+        if (!name || isNaN(seatNum) || seatNum < 1 || seatNum > 30) return;
+
+        const student = {
+          name,
+          ban:        r[banKey]              || '',
+          num:        r[numKey]              || '',
+          cloudEdu:   r[cloudKey]            || '',
+          role:       roleKey  ? (r[roleKey]  || '') : '',
+          score:      scoreKey ? (r[scoreKey] || '') : '',
+          submitTime: timeKey  ? (r[timeKey]  || '') : '',
+          seatNum,
+          _raw: r
+        };
+        seats[seatNum - 1] = student;
+        rawRows[name] = r;
+      });
+
+      undoStack   = [];
+      swapHistory = [];
+      selectedIdx = null;
+
+      document.getElementById('uploadBtn').classList.add('loaded');
+      document.getElementById('uploadLabel').textContent = file.name;
+      document.getElementById('fileStatus').textContent = `✓ ${rows.length}명 로드됨`;
+      document.getElementById('fileStatus').className = 'file-status ok';
+      document.getElementById('exportBtn').disabled = false;
+      document.getElementById('printBtn').disabled  = false;
+      document.getElementById('historyPanel').style.display = '';
+
+      renderSeats();
+    } catch(err) {
+      document.getElementById('fileStatus').textContent = '오류: ' + err.message;
+      document.getElementById('fileStatus').className = 'file-status';
+    }
+  };
+  reader.readAsText(file, 'UTF-8');
+}
+
+// ── 좌석 렌더 ──
+function renderSeats() {
+  function seatHTML(idx) {
+    const s = seats[idx];
+    const num = idx + 1;
+    const isSel = idx === selectedIdx;
+    if (!s) return `<div class="seat empty" onclick="clickSeat(${idx})">
+      <span class="seat-num-label">${num}</span>
+      <span class="seat-name" style="color:var(--text3);font-size:11px">빈자리</span>
+    </div>`;
+    return `<div class="seat${isSel ? ' selected' : ''}" onclick="clickSeat(${idx})">
+      <span class="seat-num-label">${num}</span>
+      <span class="seat-name">${s.name}</span>
+      ${s.score ? `<span class="seat-score">${s.score}점</span>` : ''}
+      ${s.role  ? `<span class="seat-meta">${s.role}</span>` : ''}
+    </div>`;
+  }
+
+  function colHTML(col) {
+    let html = '<div class="col-seats">';
+    for (let row = 0; row < 5; row++) {
+      const base = row * 6 + col * 2;
+      html += `<div class="seat-pair">${seatHTML(base)}${seatHTML(base+1)}</div>`;
+    }
+    return html + '</div>';
+  }
+
+  document.getElementById('seatingWrap').innerHTML = `
+    <div class="blackboard">교탁 / 칠판 &nbsp;▲ 앞</div>
+    <div class="seat-grid">
+      ${colHTML(0)}
+      <div class="aisle"><span class="aisle-label">통&nbsp;로</span></div>
+      ${colHTML(1)}
+      <div class="aisle"><span class="aisle-label">통&nbsp;로</span></div>
+      ${colHTML(2)}
+    </div>
+    <div class="back-label">▼ 뒤</div>`;
+}
+
+// ── 자리 클릭 ──
+function clickSeat(idx) {
+  if (!seats.some(Boolean)) return;
+
+  if (selectedIdx === null) {
+    if (!seats[idx]) return;  // 빈자리 선택 불가
+    selectedIdx = idx;
+    showSwapInfo(seats[idx].name, seats[idx].score);
+    renderSeats();
+  } else {
+    if (idx === selectedIdx) { cancelSwap(); return; }
+    if (!seats[idx] && !seats[selectedIdx]) { cancelSwap(); return; } // 둘 다 빈자리면 취소
+
+    // undo 스냅샷
+    undoStack.push(seats.map(s => s ? {...s} : null));
+    if (undoStack.length > 20) {
+      undoStack.shift();
+      if (swapHistory.length > 20) swapHistory.pop(); // history도 동기화
+    }
+
+    const aName = seats[selectedIdx]?.name || '빈자리';
+    const bName = seats[idx]?.name || '빈자리';
+    const aNum  = selectedIdx + 1;
+    const bNum  = idx + 1;
+
+    // 교환
+    const tmp = seats[idx];
+    seats[idx] = seats[selectedIdx];
+    seats[selectedIdx] = tmp;
+
+    // 이력 추가
+    const now = new Date().toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+    swapHistory.unshift(`${now}  ${aNum}번(${aName}) ↔ ${bNum}번(${bName})`);
+    renderHistory();
+
+    selectedIdx = null;
+    hideSwapInfo();
+    renderSeats();
+    document.getElementById('undoBtn').disabled = false;
+  }
+}
+
+function showSwapInfo(name, score) {
+  const info = document.getElementById('swapInfo');
+  document.getElementById('swapInfoText').textContent =
+    `✦ ${name}${score ? ' ' + score + '점' : ''} 선택됨 — 교환할 자리를 클릭하세요`;
+  info.classList.add('visible');
+}
+
+function hideSwapInfo() {
+  document.getElementById('swapInfo').classList.remove('visible');
+}
+
+function cancelSwap() {
+  selectedIdx = null;
+  hideSwapInfo();
+  renderSeats();
+}
+
+// ── 되돌리기 ──
+function undoSwap() {
+  if (!undoStack.length) return;
+  seats = undoStack.pop();
+  swapHistory.shift();
+  selectedIdx = null;
+  hideSwapInfo();
+  renderSeats();
+  renderHistory();
+  document.getElementById('undoBtn').disabled = undoStack.length === 0;
+}
+
+// ── 이력 렌더 ──
+function renderHistory() {
+  const list = document.getElementById('historyList');
+  if (!swapHistory.length) {
+    list.innerHTML = '<span class="history-empty">아직 교환 없음</span>';
+    return;
+  }
+  list.innerHTML = swapHistory
+    .map(h => `<div class="history-item">${h}</div>`)
+    .join('');
+}
+
+// ── CSV 저장 ──
+function exportCSV() {
+  const rows = [rawHeaders.join(',')];
+  // seats 순서대로 출력 (좌석번호 컬럼 업데이트)
+  const seatKey  = rawHeaders.find(h => /좌석/.test(h)) || rawHeaders[5];
+  const nameKey  = rawHeaders.find(h => /이름/.test(h)) || rawHeaders[2];
+
+  // 이름→현재 좌석번호 맵
+  const seatMap = {};
+  seats.forEach((s, i) => { if (s) seatMap[s.name] = i + 1; });
+
+  // 원본 행 순서(번호순) 유지하면서 좌석번호만 업데이트
+  const allStudents = seats.filter(Boolean);
+  allStudents.sort((a, b) => (parseInt(a.num)||0) - (parseInt(b.num)||0));
+
+  allStudents.forEach(s => {
+    const row = {...s._raw};
+    row[seatKey] = seatMap[s.name] || '';
+    rows.push(rawHeaders.map(h => {
+      const v = row[h] ?? '';
+      return v.toString().includes(',') ? `"${v}"` : v;
+    }).join(','));
+  });
+
+  const csv  = '\uFEFF' + rows.join('\r\n');
+  const blob = new Blob([csv], {type: 'text/csv;charset=utf-8;'});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  const today = new Date().toISOString().slice(0,10).replace(/-/g,'');
+  a.href = url;
+  a.download = `seating_swap_${className}_${today}.csv`;
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(url); document.body.removeChild(a); }, 500);
+}
+
+// ── 인쇄 ──
+function printSeats() {
+  window.print();
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,826 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>컴퓨터실 자리 배치</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=JetBrains+Mono:wght@400;600&display=swap');
+
+:root {
+  --bg: #0f1117;
+  --surface: #1a1d27;
+  --surface2: #22263a;
+  --border: #2e3250;
+  --accent: #4f8ef7;
+  --mentor: #8b91b8;
+  --mentee: #8b91b8;
+  --mid: #8b91b8;
+  --text: #e8eaf6;
+  --text2: #8b91b8;
+  --text3: #555a7a;
+  --radius: 10px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Noto Sans KR', sans-serif;
+  min-height: 100vh;
+  padding: 24px;
+}
+
+h1 { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+.subtitle { color: var(--text2); font-size: 13px; margin-bottom: 24px; }
+
+.layout { display: grid; grid-template-columns: 300px 1fr; gap: 20px; align-items: start; }
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+}
+
+.panel-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--text2);
+  margin-bottom: 14px;
+}
+
+/* 파일 업로드 */
+.upload-group { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
+.upload-item { display: flex; flex-direction: column; gap: 4px; }
+.upload-item > span { font-size: 12px; color: var(--text2); }
+
+.upload-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface2);
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  padding: 9px 12px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+  transition: border-color 0.2s;
+  position: relative;
+  overflow: hidden;
+}
+.upload-btn:hover { border-color: var(--accent); }
+.upload-btn.loaded { border-color: var(--accent); border-style: solid; }
+.upload-btn input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+
+.file-status { font-size: 11px; color: var(--text3); }
+.file-status.ok  { color: var(--accent); }
+.file-status.err { color: var(--text2); }
+
+/* 반 선택 */
+.class-selector { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 16px; }
+.class-btn {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 12px;
+  font-size: 13px;
+  color: var(--text2);
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.15s;
+}
+.class-btn:hover { border-color: var(--accent); color: var(--text); }
+.class-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; }
+
+/* 버튼 */
+.btn {
+  width: 100%;
+  padding: 10px;
+  border-radius: 8px;
+  border: none;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s;
+  margin-bottom: 8px;
+}
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover { filter: brightness(1.1); }
+.btn-primary:disabled { opacity: 0.35; cursor: not-allowed; filter: none; }
+.btn-secondary { background: var(--surface2); color: var(--text2); border: 1px solid var(--border); }
+.btn-secondary:hover { border-color: var(--accent); color: var(--text); }
+
+/* 범례 */
+.legend { display: flex; gap: 12px; margin-bottom: 12px; }
+.legend-item { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text2); }
+.legend-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+
+/* 학생 목록 */
+.student-list {
+  max-height: 300px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+.student-list::-webkit-scrollbar { width: 4px; }
+.student-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+.student-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  background: var(--surface2);
+  border-radius: 6px;
+  border: 1px solid transparent;
+}
+
+.student-num  { font-size: 11px; font-family: 'JetBrains Mono', monospace; width: 22px; color: var(--text3); text-align: right; }
+.student-name { flex: 1; font-size: 13px; }
+.student-time { font-size: 10px; color: var(--text3); min-width: 60px; text-align: right; font-family: 'JetBrains Mono', monospace; }
+
+.role-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: filter 0.15s;
+  user-select: none;
+  white-space: nowrap;
+}
+.role-badge.mentor { background: rgba(139,145,184,0.12); color: var(--mid); border: 1px solid rgba(139,145,184,0.2); }
+.role-badge.mentee { background: rgba(139,145,184,0.12); color: var(--mid); border: 1px solid rgba(139,145,184,0.2); }
+.role-badge.mid    { background: rgba(139,145,184,0.08); color: var(--text3); border: 1px solid rgba(139,145,184,0.15); }
+.role-badge:hover  { filter: brightness(1.3); }
+
+/* 좌석 배치도 */
+.seating-wrap { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+
+.blackboard {
+  width: 100%;
+  max-width: 600px;
+  background: #192e1f;
+  border: 2px solid #2a5038;
+  border-radius: 8px;
+  padding: 10px;
+  text-align: center;
+  font-size: 13px;
+  color: #5ab87a;
+  letter-spacing: 2px;
+}
+
+.seat-grid {
+  display: grid;
+  grid-template-columns: 1fr 18px 1fr 18px 1fr;
+  gap: 10px;
+  width: 100%;
+  max-width: 600px;
+}
+
+.aisle { display: flex; align-items: center; justify-content: center; }
+.aisle-label { writing-mode: vertical-rl; font-size: 10px; color: var(--text3); letter-spacing: 1px; }
+
+.col-seats { display: flex; flex-direction: column; gap: 8px; }
+
+.seat-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+
+.seat {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 5px 6px;
+  min-height: 68px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  position: relative;
+}
+.seat.mentor-seat { border-color: var(--border); background: var(--surface2); }
+.seat.mentee-seat { border-color: var(--border); background: var(--surface2); }
+.seat.mid-seat    { border-color: var(--border); background: var(--surface2); }
+.seat.empty       { background: var(--surface); border-color: #1c2038; }
+
+.seat-num-label { font-size: 9px; font-family: 'JetBrains Mono', monospace; color: var(--text3); position: absolute; top: 4px; left: 5px; }
+.seat-score { font-size: 11px; font-family: 'JetBrains Mono', monospace; color: var(--text2); font-weight: 500; }
+.seat-name { font-size: 12px; font-weight: 500; text-align: center; color: var(--text); }
+.seat-role { font-size: 9px; font-weight: 700; letter-spacing: 0.3px; }
+.seat-role.mentor { color: var(--mentor); }
+.seat-role.mentee { color: var(--mentee); }
+.seat-role.mid    { color: var(--mid); }
+
+.back-label { font-size: 12px; color: var(--text3); letter-spacing: 1px; }
+
+.seat { cursor: pointer; transition: border-color 0.15s, box-shadow 0.15s; }
+.seat:hover { border-color: var(--accent) !important; }
+.seat.selected { border-color: var(--accent) !important; box-shadow: 0 0 0 2px rgba(79,142,247,0.4); }
+.seat.empty { cursor: default; }
+.seat.empty:hover { border-color: #1c2038 !important; }
+
+.swap-hint {
+  font-size: 12px; color: var(--accent); text-align: center;
+  padding: 6px 12px; background: rgba(79,142,247,0.08);
+  border: 1px solid rgba(79,142,247,0.25); border-radius: 6px;
+  margin-bottom: 8px;
+}
+
+.msg { font-size: 13px; color: var(--text2); text-align: center; padding: 48px 20px; line-height: 2; }
+
+.divider { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
+
+/* 모달 */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.65);
+  z-index: 100;
+  align-items: center;
+  justify-content: center;
+}
+.modal-overlay.open { display: flex; }
+.modal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+  width: 300px;
+}
+.modal h3 { font-size: 15px; margin-bottom: 6px; }
+.modal p  { font-size: 13px; color: var(--text2); margin-bottom: 16px; }
+.modal-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.modal-btns .btn { margin-bottom: 0; flex: 1; min-width: 70px; }
+</style>
+</head>
+<body>
+
+<h1>🖥️ 컴퓨터실 자리 배치</h1>
+<p class="subtitle">명단.csv + 시험점수.csv 를 불러와 자동 배치 (총점수 우선, 동점 시 제출속도)</p>
+
+<div class="layout">
+  <!-- 왼쪽 패널 -->
+  <div style="display:flex;flex-direction:column;gap:16px;">
+
+    <div class="panel">
+      <div class="panel-title">📁 데이터 불러오기</div>
+      <div class="upload-group">
+        <div class="upload-item">
+          <span>① 명단.csv &nbsp;(반 / 번호 / 이름 / 구름EDU)</span>
+          <label class="upload-btn" id="rosterBtn">
+            <span>📋</span>
+            <span id="rosterLabel">명단.csv 선택</span>
+            <input type="file" accept=".csv" onchange="loadRoster(this)">
+          </label>
+          <span class="file-status" id="rosterStatus"></span>
+        </div>
+        <div class="upload-item">
+          <span>② 시험점수.csv &nbsp;(순위 / 이름 / 이메일 / 시험시작 / 최종제출시간 / 총점수)</span>
+          <label class="upload-btn" id="scoreBtn">
+            <span>📝</span>
+            <span id="scoreLabel">시험점수.csv 선택</span>
+            <input type="file" accept=".csv" onchange="loadScore(this)">
+          </label>
+          <span class="file-status" id="scoreStatus"></span>
+        </div>
+      </div>
+
+      <div class="panel-title">🏫 반 선택</div>
+      <div class="class-selector" id="classSelector">
+        <span style="font-size:12px;color:var(--text3)">명단.csv를 먼저 불러오세요</span>
+      </div>
+
+      <hr class="divider">
+      <button class="btn btn-primary" id="assignBtn" onclick="assignSeats()" disabled>🔀 자동 배치</button>
+      <button class="btn btn-secondary" id="undoBtn" onclick="undoSwap()" disabled>↩ 되돌리기</button>
+      <button class="btn btn-secondary" onclick="exportCSV()">💾 CSV 저장</button>
+    </div>
+
+    <!-- 학생 목록 -->
+    <div class="panel" id="studentPanel" style="display:none">
+      <div class="panel-title">👥 학생 목록 &nbsp;<span style="font-weight:400;color:var(--text3)" id="listCount"></span></div>
+      <div class="legend">
+        <div class="legend-item"><div class="legend-dot" style="background:var(--text2)"></div>안쪽 배치</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--text3)"></div>복도쪽 배치</div>
+      </div>
+      <div class="student-list" id="studentList"></div>
+      <div style="font-size:11px;color:var(--text3)">역할 배지를 클릭하면 변경할 수 있습니다</div>
+    </div>
+
+  </div>
+
+  <!-- 오른쪽: 좌석 배치도 -->
+  <div class="panel">
+    <div class="panel-title">🗺️ 자리 배치도</div>
+    <div class="seating-wrap" id="seatingWrap">
+      <div class="msg">① 두 CSV 파일을 불러오고<br>② 반을 선택한 후<br>③ 자동 배치 버튼을 눌러주세요</div>
+    </div>
+  </div>
+</div>
+
+<!-- 역할 변경 모달 -->
+<div class="modal-overlay" id="roleModal">
+  <div class="modal">
+    <h3 id="modalTitle">역할 변경</h3>
+    <p id="modalDesc"></p>
+    <div class="modal-btns">
+      <button class="btn btn-primary" onclick="setRole('mentor')">잘함 ●</button>
+      <button class="btn btn-primary" onclick="setRole('mentee')">도움필요 ●</button>
+      <button class="btn btn-secondary"                                onclick="setRole('mid')">중간 ●</button>
+      <button class="btn btn-secondary"                                onclick="closeModal()">취소</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── 상태 ──
+let rosterData      = [];   // [{ban, num, name, cloudEdu, presetRole}]
+let scoreData       = {};   // name → {score: 총점수, submitTime: 최종제출시간}
+let students        = [];   // 현재 반 [{...rosterData, submitTime, examScore, compositeScore, role}]
+let seats           = [];   // 30 슬롯, null or student 객체 ref
+let selectedClass   = null;
+let modalTarget     = null;
+let selectedSeatIdx = null; // 자리 교환용 첫번째 선택
+let undoStack       = [];   // undo 히스토리 (seats 스냅샷)
+
+// ── CSV 파싱 ──
+function parseCSV(text) {
+  const lines = text.trim().split(/\r?\n/);
+  // 탭/콤마 자동 감지
+  const delim = lines[0].includes('\t') ? '\t' : ',';
+  const headers = splitCSVLine(lines[0], delim).map(h => h.replace(/^"|"$/g,'').trim());
+  return lines.slice(1).filter(l => l.trim()).map(line => {
+    const cols = splitCSVLine(line, delim).map(c => c.replace(/^"|"$/g,'').trim());
+    const obj = {};
+    headers.forEach((h, i) => obj[h] = cols[i] ?? '');
+    return obj;
+  });
+}
+
+function splitCSVLine(line, delim) {
+  if (delim === '\t') return line.split('\t').map(c => c.replace(/^"|"$/g,'').trim());
+  const cols = [];
+  let cur = '', inQ = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === '"') { inQ = !inQ; continue; }
+    if (c === ',' && !inQ) { cols.push(cur); cur = ''; continue; }
+    cur += c;
+  }
+  cols.push(cur);
+  return cols;
+}
+
+function readFile(file) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = e => res(e.target.result);
+    r.onerror = rej;
+    r.readAsText(file, 'UTF-8');
+  });
+}
+
+// ── 명단.csv 로드 ──
+async function loadRoster(input) {
+  const file = input.files[0];
+  if (!file) return;
+  try {
+    const text = await readFile(file);
+    const rows = parseCSV(text);
+    if (!rows.length) throw new Error('데이터가 없습니다');
+    const keys = Object.keys(rows[0] || {});
+    if (!keys.length) throw new Error('헤더를 읽을 수 없습니다');
+
+    // 컬럼 매칭: 정확한 패턴 우선, 짧은 패턴은 단어 경계 고려
+    const banKey   = keys.find(k => /^반$|학반|class|ban/i.test(k))           || keys[0];
+    const numKey   = keys.find(k => /번호|학번|num(?:ber)?$|^no$/i.test(k))   || keys[1];
+    const nameKey  = keys.find(k => /이름|성명|name/i.test(k))                || keys[2];
+    const cloudKey = keys.find(k => /구름|cloud/i.test(k))                    || keys[3];
+    const noteKey  = keys.find(k => /비고|note|remark/i.test(k))              || null;
+
+    rosterData = rows.map(r => ({
+      ban:        (r[banKey]   || '').replace(/반$/, '').trim(),
+      num:        parseInt(r[numKey]) || 0,
+      name:       (r[nameKey]  || '').trim(),
+      cloudEdu:   (r[cloudKey] || '').trim(),
+      presetRole: noteKey ? (() => {
+        const v = (r[noteKey] || '').trim();
+        if (v === '멘토') return 'mentor';
+        if (v === '멘티') return 'mentee';
+        return null;
+      })() : null,
+      isSpecial: noteKey ? (r[noteKey] || '').trim() === '특수' : false
+    })).filter(r => r.name);
+
+    setStatus('rosterBtn','rosterLabel','rosterStatus', file.name, `✓ ${rosterData.length}명 로드됨`, true);
+    buildClassSelector();
+    tryEnableAssign();
+  } catch(e) {
+    setStatus('rosterBtn','rosterLabel','rosterStatus', file.name, '오류: ' + e.message, false);
+  }
+}
+
+// ── 시험점수.csv 로드 ──
+// 컬럼: 순위 / 이름 / 이메일 / 시험시작 / 최종제출시간 / 총점수
+async function loadScore(input) {
+  const file = input.files[0];
+  if (!file) return;
+  try {
+    const text = await readFile(file);
+    const rows = parseCSV(text);
+    if (!rows.length) throw new Error('데이터가 없습니다');
+    const keys = Object.keys(rows[0] || {});
+    if (!keys.length) throw new Error('헤더를 읽을 수 없습니다');
+
+    const nameKey   = keys.find(k => /^이름$|^name$/i.test(k))                   || keys[1];
+    const submitKey = keys.find(k => /최종.*제출|제출.*시간|submit/i.test(k))      || keys[4];
+    const scoreKey  = keys.find(k => /총\s*점수|total\s*score/i.test(k))           || keys[keys.length - 1];
+
+    console.log('[시험점수 CSV] 감지된 컬럼:', keys);
+    console.log('[시험점수 CSV] 이름키:', nameKey, '/ 제출키:', submitKey, '/ 점수키:', scoreKey);
+
+    scoreData = {};
+    rows.forEach(r => {
+      const name      = (r[nameKey]   || '').trim();
+      const rawSubmit = (r[submitKey] || '').trim();
+      const score     = parseFloat(r[scoreKey]);
+      if (!name) return;
+      scoreData[name] = {
+        score:      isNaN(score) ? 0 : score,
+        submitTime: rawSubmit ? parseTime(rawSubmit) : Infinity,
+        rawSubmit:  rawSubmit   // CSV 출력용 원본 문자열 보존
+      };
+    });
+
+    setStatus('scoreBtn','scoreLabel','scoreStatus', file.name, `✓ ${Object.keys(scoreData).length}명 로드됨`, true);
+    tryEnableAssign();
+  } catch(e) {
+    setStatus('scoreBtn','scoreLabel','scoreStatus', file.name, '오류: ' + e.message, false);
+  }
+}
+
+function parseTime(str) {
+  // ISO 날짜시간
+  const d = new Date(str);
+  if (!isNaN(d.getTime())) return d.getTime();
+  // HH:MM:SS
+  const m = str.match(/^(\d+):(\d+):(\d+)$/);
+  if (m) return (+m[1])*3600 + (+m[2])*60 + (+m[3]);
+  return Infinity;
+}
+
+function setStatus(btnId, labelId, statusId, filename, msg, ok) {
+  document.getElementById(btnId).classList.toggle('loaded', ok);
+  document.getElementById(labelId).textContent = filename;
+  const el = document.getElementById(statusId);
+  el.textContent = msg;
+  el.className = 'file-status ' + (ok ? 'ok' : 'err');
+}
+
+// ── 반 선택 ──
+function buildClassSelector() {
+  const bans = [...new Set(rosterData.map(r => r.ban).filter(Boolean))].sort();
+  document.getElementById('classSelector').innerHTML =
+    bans.map(b => `<button class="class-btn" onclick="selectClass('${b}')">${b}반</button>`).join('');
+}
+
+function selectClass(ban) {
+  selectedClass = ban;
+  document.querySelectorAll('.class-btn').forEach(b =>
+    b.classList.toggle('active', b.textContent === ban + '반'));
+  tryEnableAssign();
+}
+
+function tryEnableAssign() {
+  document.getElementById('assignBtn').disabled =
+    !(rosterData.length > 0 && selectedClass && Object.keys(scoreData).length > 0);
+}
+
+// ── 자동 배치 ──
+function assignSeats() {
+  // 해당 반 학생 추출 & 번호순 정렬
+  const classStudents = rosterData
+    .filter(r => r.ban === selectedClass)
+    .sort((a, b) => a.num - b.num);
+
+  // 시험점수 매핑
+  const withTime = classStudents.map(s => {
+    const d = scoreData[s.name] ?? scoreData[s.cloudEdu] ?? null;
+    return {
+      ...s,
+      examScore:  d ? d.score      : 0,
+      submitTime: d ? d.submitTime : Infinity,
+      rawSubmit:  d ? d.rawSubmit  : ''
+    };
+  });
+
+  // 1단계: 비고란 수동 지정 확정
+  withTime.forEach(s => {
+    if (s.presetRole === 'mentor') s.role = 'mentor';
+    else if (s.presetRole === 'mentee') s.role = 'mentee';
+    else s.role = null;
+  });
+
+  const preset = withTime.filter(s => s.role !== null);
+  const rest   = withTime.filter(s => s.role === null);
+
+  // 2단계: 총점수 내림차순 → 동점이면 최종제출시간 오름차순(빠를수록 상위)
+  const sortedRest = [...rest].sort((a, b) => {
+    if (b.examScore !== a.examScore) return b.examScore - a.examScore;
+    return a.submitTime - b.submitTime;
+  });
+  const total = withTime.length;
+  const targetMentor = Math.ceil(total / 3);
+  const targetMentee = Math.ceil(total / 3);
+
+  const presetMentorCnt = preset.filter(s => s.role === 'mentor').length;
+  const presetMenteeCnt = preset.filter(s => s.role === 'mentee').length;
+
+  let needMentor = Math.max(0, targetMentor - presetMentorCnt);
+  let needMentee = Math.max(0, targetMentee - presetMenteeCnt);
+
+  // 3단계: 상위에서 멘토, 하위에서 멘티, 나머지 중간
+  sortedRest.forEach((s, i) => {
+    if (i < needMentor) s.role = 'mentor';
+    else if (i >= sortedRest.length - needMentee && needMentee > 0) s.role = 'mentee';
+    else s.role = 'mid';
+  });
+
+  // 번호순 복원
+  students = withTime.map(s =>
+    preset.find(r => r.name === s.name) ||
+    sortedRest.find(r => r.name === s.name)
+  );
+
+  pairAndAssign();
+  renderStudentList();
+  renderSeats();
+  document.getElementById('studentPanel').style.display = '';
+}
+
+// ── 페어링 & 좌석 배정 ──
+// 복도쪽 자리 (0-indexed): A열=base+1, B열=base+1, C열=base+0
+// 1행: 1(안)2(복도) | 3(안)4(복도) | 5(복도)6(안)
+// col 0,1 → 짝 중 index 1이 복도, col 2 → index 0이 복도
+function aisleIdx(col) { return col < 2 ? 1 : 0; }
+function innerIdx(col) { return col < 2 ? 0 : 1; }
+
+// Fisher-Yates 셔플
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function pairAndAssign() {
+  // 특수 학생 분리
+  const specials = shuffle(students.filter(s => s.isSpecial));
+  const normals  = students.filter(s => !s.isSpecial);
+
+  const mentors = shuffle(normals.filter(s => s.role === 'mentor'));
+  const mentees = shuffle(normals.filter(s => s.role === 'mentee'));
+  let   mids    = shuffle(normals.filter(s => s.role === 'mid'));
+
+  // 특수 학생에게 mid 학생을 짝으로 붙이기
+  const specialPairsArr = [];
+  specials.forEach(sp => {
+    if (mids.length > 0) {
+      specialPairsArr.push([sp, mids.shift()]); // mid 학생과 짝
+    } else if (mentors.length > 0) {
+      specialPairsArr.push([sp, mentors.shift()]);
+    } else if (mentees.length > 0) {
+      specialPairsArr.push([sp, mentees.shift()]);
+    } else {
+      specialPairsArr.push([sp, null]); // 짝 없을 경우만
+    }
+  });
+
+  // 일반 멘토-멘티 페어
+  const pairs = [];
+  const minP = Math.min(mentors.length, mentees.length);
+  for (let i = 0; i < minP; i++) pairs.push([mentors[i], mentees[i]]);
+
+  // 남은 학생들 2인1조
+  const unpaired = [...mentors.slice(minP), ...mentees.slice(minP), ...mids];
+  for (let i = 0; i < unpaired.length; i += 2)
+    pairs.push([unpaired[i], unpaired[i+1] ?? null]);
+
+  // 특수 쌍은 5행으로, 일반 쌍은 셔플 후 1~4행
+  const specialPairs = shuffle(specialPairsArr);
+  const normalPairs  = shuffle(pairs);
+
+  seats = new Array(30).fill(null);
+
+  function placePair(pair, base, col) {
+    const [a, b] = pair;
+    const ai = aisleIdx(col), ii = innerIdx(col);
+    if (b && b.role === 'mentee') { seats[base+ai]=b; seats[base+ii]=a; }
+    else { seats[base+ii]=a; seats[base+ai]=b??null; }
+  }
+
+  // 5행(row=4, 자리 25~30)에 특수 학생 우선 배치
+  let si = 0;
+  for (let col = 0; col < 3 && si < specialPairs.length; col++) {
+    placePair(specialPairs[si++], 4*6 + col*2, col);
+  }
+
+  // 나머지 자리에 일반 학생 배치 (빈 자리만, 앞→뒤 순)
+  let ni = 0;
+  for (let row = 0; row < 5; row++) {
+    for (let col = 0; col < 3; col++) {
+      const base = row*6 + col*2;
+      if (seats[base] !== null || seats[base+1] !== null) continue;
+      if (ni >= normalPairs.length) continue;
+      placePair(normalPairs[ni++], base, col);
+    }
+  }
+}
+
+// ── 학생 목록 렌더 ──
+function renderStudentList() {
+  document.getElementById('listCount').textContent = `(${students.length}명)`;
+  document.getElementById('studentList').innerHTML = students.map((s, i) => {
+    const scoreStr = s.examScore !== undefined ? s.examScore : '-';
+    const timeStr  = formatTime(s.submitTime);
+    return `
+      <div class="student-item">
+        <span class="student-num">${s.num}</span>
+        <span class="student-name">${s.name}</span>
+        <span class="student-time" title="총점수:${scoreStr} / 제출:${timeStr}">${scoreStr}</span>
+        <span class="role-badge ${s.role}" onclick="openModal(${i})">●</span>
+      </div>`;
+  }).join('');
+}
+
+function formatTime(t) {
+  if (t === Infinity) return '미제출';
+  if (t < 100000) {
+    // 초 단위
+    const h = Math.floor(t/3600), m = Math.floor((t%3600)/60), s = t%60;
+    return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  }
+  return new Date(t).toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+}
+
+// ── 좌석 배치도 렌더 ──
+function renderSeats() {
+  function seatHTML(idx) {
+    const s = seats[idx];
+    const num = idx + 1;
+    const isSelected = idx === selectedSeatIdx;
+    if (!s) return `<div class="seat empty" onclick="clickSeat(${idx})"><span class="seat-num-label">${num}</span><span class="seat-name" style="color:var(--text3);font-size:11px">빈자리</span></div>`;
+    const sd2 = scoreData[s.name] || scoreData[s.cloudEdu] || null;
+    const scoreDisp = sd2 ? sd2.score : null;
+    return `<div class="seat ${s.role}-seat${isSelected ? ' selected' : ''}" onclick="clickSeat(${idx})">
+      <span class="seat-num-label">${num}</span>
+      <span class="seat-name">${s.name}</span>
+      ${scoreDisp !== null ? `<span class="seat-score">${scoreDisp}점</span>` : ''}
+    </div>`;
+  }
+
+  function colHTML(col) {
+    let html = '<div class="col-seats">';
+    for (let row = 0; row < 5; row++) {
+      const base = row * 6 + col * 2;
+      html += `<div class="seat-pair">${seatHTML(base)}${seatHTML(base+1)}</div>`;
+    }
+    return html + '</div>';
+  }
+
+  const hint = (() => {
+    if (selectedSeatIdx === null) return '';
+    const sel = seats[selectedSeatIdx];
+    const selSd = sel && (scoreData[sel.name] || scoreData[sel.cloudEdu]) || null;
+    const selScore = selSd ? `${selSd.score}점` : '';
+    return `<div class="swap-hint">✦ ${sel?.name || '?'}${selScore ? ' <b>' + selScore + '</b>' : ''} 선택됨 — 교환할 자리를 클릭하세요 &nbsp;<span style="cursor:pointer;opacity:0.6" onclick="cancelSwap()">✕</span></div>`;
+  })();
+
+  document.getElementById('seatingWrap').innerHTML = `
+    <div class="blackboard">교탁 / 칠판 &nbsp;▲ 앞</div>
+    ${hint}
+    <div class="seat-grid">
+      ${colHTML(0)}
+      <div class="aisle"><span class="aisle-label">통&nbsp;로</span></div>
+      ${colHTML(1)}
+      <div class="aisle"><span class="aisle-label">통&nbsp;로</span></div>
+      ${colHTML(2)}
+    </div>
+    <div class="back-label">▼ 뒤</div>`;
+}
+
+// ── 자리 클릭 처리 ──
+function clickSeat(idx) {
+  if (selectedSeatIdx === null) {
+    // 첫 클릭: 학생 있는 자리만 선택
+    if (!seats[idx]) return;
+    selectedSeatIdx = idx;
+    renderSeats();
+  } else {
+    // 두 번째 클릭: 교환
+    if (idx === selectedSeatIdx) { cancelSwap(); return; }
+    // undo 스냅샷 저장 (deep copy: role 변경도 복원 가능하도록)
+    undoStack.push(seats.map(s => s ? {...s} : null));
+    if (undoStack.length > 20) undoStack.shift();
+    // 교환
+    const tmp = seats[idx];
+    seats[idx] = seats[selectedSeatIdx];
+    seats[selectedSeatIdx] = tmp;
+    selectedSeatIdx = null;
+    renderSeats();
+    updateUndoBtn();
+  }
+}
+
+function cancelSwap() {
+  selectedSeatIdx = null;
+  renderSeats();
+}
+
+function undoSwap() {
+  if (!undoStack.length) return;
+  const prev = undoStack.pop();
+  seats = prev;
+  // students 참조도 복원된 seat 객체로 동기화
+  students = students.map(s => {
+    const restored = prev.find(p => p && p.name === s.name);
+    return restored ? restored : s;
+  });
+  selectedSeatIdx = null;
+  renderSeats();
+  renderStudentList();
+  updateUndoBtn();
+}
+
+function updateUndoBtn() {
+  const btn = document.getElementById('undoBtn');
+  if (btn) btn.disabled = undoStack.length === 0;
+}
+
+// ── 역할 변경 모달 ──
+function openModal(idx) {
+  modalTarget = idx;
+  const s = students[idx];
+  document.getElementById('modalTitle').textContent = s.name;
+  document.getElementById('modalDesc').textContent = `현재: ${s.role === 'mentor' ? '잘함 (상위)' : s.role === 'mentee' ? '도움필요 (하위)' : '중간'}`;
+  document.getElementById('roleModal').classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('roleModal').classList.remove('open');
+  modalTarget = null;
+}
+
+function setRole(role) {
+  if (modalTarget === null) return;
+  students[modalTarget].role = role;
+  closeModal();
+  pairAndAssign();
+  renderStudentList();
+  renderSeats();
+}
+
+document.getElementById('roleModal').addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeModal();
+});
+
+// ── CSV 저장 ──
+function exportCSV() {
+  if (!students.length) { alert('먼저 배치를 진행해주세요.'); return; }
+
+  const rows = [['반', '번호', '이름', '구름EDU', '멘토멘티', '좌석번호', '총점수', '최종제출시간']];
+  students.forEach(s => {
+    // 이름 기준으로 좌석 찾기 (deep copy 후 참조 불일치 방지)
+    const seatIdx = seats.findIndex(seat => seat && seat.name === s.name);
+    const seatNum = seatIdx >= 0 ? seatIdx + 1 : '';
+    const note    = s.role === 'mentor' ? '멘토' : s.role === 'mentee' ? '멘티' : '';
+    // scoreData에서 직접 가져오기 (가장 신뢰할 수 있는 원본)
+    const sd      = scoreData[s.name] || scoreData[s.cloudEdu] || null;
+    const score   = sd ? sd.score    : '';
+    const timeStr = sd ? sd.rawSubmit : '';
+    rows.push([s.ban, s.num, s.name, s.cloudEdu || '', note, seatNum, score, timeStr]);
+  });
+
+  const csv = '\uFEFF' + rows.map(r => r.join(',')).join('\r\n');
+  const blob = new Blob([csv], {type: 'text/csv;charset=utf-8;'});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  const today = new Date().toISOString().slice(0,10).replace(/-/g,'');
+  a.href = url; a.download = `명단_${selectedClass}반_${today}.csv`;
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(url); document.body.removeChild(a); }, 500);
+}
+</script>
+</body>
+</html>
