@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>자리 배치도 출력</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap');
+
+:root {
+  --bg: #f0f2f5;
+  --surface: #ffffff;
+  --border: #dee2e6;
+  --accent: #3b5bdb;
+  --text: #1a1a2e;
+  --text2: #495057;
+  --text3: #adb5bd;
+  --mentor: rgba(59,91,219,.6);
+  --mentee: rgba(134,142,150,.6);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Noto Sans KR', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+/* ── 업로드 화면 ── */
+#upload-screen {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  min-height: 100vh; padding: 40px 20px; gap: 24px;
+}
+
+.upload-title { font-size: 22px; font-weight: 700; color: var(--text); }
+.upload-subtitle { font-size: 14px; color: var(--text2); margin-top: 4px; text-align: center; }
+
+.drop-area-wrap { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; }
+
+.drop-area {
+  width: 260px; min-height: 160px;
+  border: 2px dashed var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 10px; padding: 24px; cursor: pointer;
+  transition: border-color .2s, background .2s;
+  position: relative; overflow: hidden;
+}
+.drop-area:hover, .drop-area.drag-over { border-color: var(--accent); background: rgba(59,91,219,.04); }
+.drop-area.loaded { border-color: #2f9e44; border-style: solid; background: rgba(47,158,68,.04); }
+.drop-area input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.drop-icon { font-size: 36px; }
+.drop-label { font-size: 13px; font-weight: 700; color: var(--text); text-align: center; }
+.drop-hint { font-size: 11px; color: var(--text3); text-align: center; }
+.drop-status { font-size: 12px; color: #2f9e44; font-weight: 500; text-align: center; }
+.drop-error  { font-size: 12px; color: #e03131; text-align: center; }
+
+.file-list { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; max-height: 80px; overflow-y: auto; width: 100%; }
+.file-chip { font-size: 11px; background: rgba(47,158,68,.1); color: #2f9e44; border-radius: 6px; padding: 2px 8px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* 반 탭 (배치도 화면) */
+.ban-tab-bar { display: flex; gap: 6px; flex-wrap: wrap; padding: 10px 24px; background: #f8f9fa; border-bottom: 1px solid var(--border); }
+.ban-tab { padding: 5px 16px; border-radius: 16px; border: 1.5px solid var(--border); background: #fff; color: var(--text2); font-size: 13px; font-weight: 700; font-family: inherit; cursor: pointer; transition: all .15s; }
+.ban-tab.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+.generate-btn {
+  padding: 12px 40px; background: var(--accent); color: #fff;
+  border: none; border-radius: 10px; font-size: 15px; font-weight: 700;
+  font-family: inherit; cursor: pointer; transition: filter .15s;
+  opacity: .4; pointer-events: none;
+}
+.generate-btn.ready { opacity: 1; pointer-events: auto; }
+.generate-btn.ready:hover { filter: brightness(1.1); }
+
+/* ── 배치도 화면 ── */
+#print-screen { display: none; }
+
+.top-bar {
+  background: #fff; border-bottom: 1px solid var(--border);
+  padding: 12px 24px; display: flex; align-items: center; gap: 12px;
+  flex-wrap: wrap;
+}
+.top-bar h1 { font-size: 16px; font-weight: 700; flex: 1; }
+
+.tab-group { display: flex; gap: 6px; }
+.tab {
+  padding: 7px 20px; border-radius: 20px; border: 2px solid var(--accent);
+  background: #fff; color: var(--accent); font-size: 13px; font-weight: 700;
+  font-family: inherit; cursor: pointer; transition: all .15s;
+}
+.tab.active { background: var(--accent); color: #fff; }
+
+.btn-group { display: flex; gap: 8px; margin-left: auto; }
+.btn {
+  padding: 7px 16px; border-radius: 8px; border: 1px solid var(--border);
+  background: #fff; color: var(--text2); font-size: 13px; font-weight: 700;
+  font-family: inherit; cursor: pointer; transition: all .15s;
+}
+.btn:hover { border-color: var(--accent); color: var(--accent); }
+.btn-back { background: var(--bg); }
+
+/* 배치도 */
+.chart-container { padding: 24px; max-width: 900px; margin: 0 auto; }
+
+.chart-title { text-align: center; margin-bottom: 16px; }
+.chart-title h2 { font-size: 18px; font-weight: 700; }
+.chart-title p { font-size: 12px; color: var(--text2); margin-top: 3px; }
+
+.blackboard {
+  background: #1b4332; border: 3px solid #2d6a4f; border-radius: 10px;
+  padding: 12px; text-align: center; font-size: 13px; color: #95d5b2;
+  letter-spacing: 3px; margin-bottom: 14px; font-weight: 700;
+}
+.back-label { text-align: center; font-size: 11px; color: var(--text3); margin-top: 8px; letter-spacing: 1px; }
+
+.seat-grid { display: flex; flex-direction: column; gap: 8px; }
+.seat-row { display: grid; grid-template-columns: 1fr 14px 1fr 14px 1fr; gap: 8px; align-items: stretch; }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.aisle { display: flex; align-items: center; justify-content: center; }
+.aisle::after { content: ''; display: block; width: 2px; height: 100%; background: #dee2e6; border-radius: 1px; }
+
+/* 학생용 좌석 */
+.seat-student {
+  background: #fff; border: 1.5px solid var(--border); border-radius: 8px;
+  padding: 8px 4px; min-height: 54px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 3px; position: relative;
+}
+.seat-student.empty { background: #f8f9fa; border-color: #e9ecef; }
+.seat-student .sn { font-size: 9px; font-family: 'JetBrains Mono', monospace; color: var(--text3); position: absolute; top: 3px; left: 4px; }
+.seat-student .sname { font-size: 12px; font-weight: 500; text-align: center; }
+.seat-student .snum  { font-size: 10px; color: var(--text2); font-weight: 500; }
+.seat-student .empty-lbl { font-size: 10px; color: #ced4da; }
+
+/* 교사용 좌석 */
+.seat-teacher {
+  background: #fff; border: 1.5px solid var(--border); border-radius: 8px;
+  padding: 6px 4px 6px; min-height: 150px;
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  position: relative;
+}
+.seat-teacher.empty  { background: #f8f9fa; border-color: #e9ecef; justify-content: center; }
+.seat-teacher .sn    { font-size: 9px; font-family: 'JetBrains Mono', monospace; color: var(--text3); position: absolute; top: 3px; left: 4px; }
+.seat-teacher .sphoto { width: 72px; height: 90px; object-fit: cover; border-radius: 5px; margin-top: 14px; flex-shrink: 0; }
+.seat-teacher .nophoto { width: 72px; height: 90px; background: #e9ecef; border-radius: 5px; display: flex; align-items: center; justify-content: center; font-size: 9px; color: #adb5bd; margin-top: 14px; flex-shrink: 0; }
+.seat-teacher .sname  { font-size: 11px; font-weight: 600; text-align: center; }
+.seat-teacher .snum  { font-size: 10px; color: var(--text2); font-weight: 500; }
+.seat-teacher .empty-lbl { font-size: 10px; color: #ced4da; }
+
+/* 범례 */
+.legend { display: flex; gap: 16px; justify-content: center; margin-top: 12px; }
+.legend-item { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text2); }
+.legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+
+/* ── 인쇄 ── */
+@media print {
+  @page { size: A4 portrait; margin: 10mm; }
+  body { background: #fff; }
+  #upload-screen { display: none !important; }
+  #print-screen { display: block !important; }
+  .top-bar, .ban-tab-bar { display: none !important; }
+  .chart-container { padding: 0; max-width: 100%; }
+  .view { display: none !important; }
+  .view.active { display: block !important; }
+  /* 반별 페이지 분리 */
+  .ban-chart { display: block !important; page-break-after: always; }
+  .ban-chart:last-child { page-break-after: avoid; }
+  .seat-student, .seat-teacher { break-inside: avoid; }
+  .blackboard { background: #e8f5e9 !important; color: #2e7d32 !important; border-color: #a5d6a7 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+}
+</style>
+</head>
+<body>
+
+<!-- ── 업로드 화면 ── -->
+<div id="upload-screen">
+  <div class="upload-title">🖥️ 자리 배치도 출력</div>
+  <p class="upload-subtitle">두 파일을 드래그&드롭 하거나 클릭해서 선택하세요</p>
+
+  <div class="drop-area-wrap">
+    <!-- CSV -->
+    <div class="drop-area" id="drop-csv"
+         ondragover="onDragOver(event,'drop-csv')"
+         ondragleave="onDragLeave('drop-csv')"
+         ondrop="onDrop(event,'csv')">
+      <input type="file" accept=".csv" multiple onchange="loadFiles(this.files,'csv')">
+      <div class="drop-icon">📋</div>
+      <div class="drop-label">좌석 배치 CSV</div>
+      <div class="drop-hint">반별 CSV 여러 개 가능</div>
+      <div class="file-list" id="csv-file-list"></div>
+    </div>
+
+    <!-- XLSX -->
+    <div class="drop-area" id="drop-xlsx"
+         ondragover="onDragOver(event,'drop-xlsx')"
+         ondragleave="onDragLeave('drop-xlsx')"
+         ondrop="onDrop(event,'xlsx')">
+      <input type="file" accept=".xlsx" multiple onchange="loadFiles(this.files,'xlsx')">
+      <div class="drop-icon">📸</div>
+      <div class="drop-label">학생 사진 Excel</div>
+      <div class="drop-hint">반별 Excel 여러 개 가능 (선택)</div>
+      <div class="file-list" id="xlsx-file-list"></div>
+    </div>
+  </div>
+
+  <button class="generate-btn" id="generate-btn" onclick="generate()">배치도 생성</button>
+</div>
+
+<!-- ── 배치도 화면 ── -->
+<div id="print-screen">
+  <div class="top-bar">
+    <h1>자리 배치도</h1>
+    <div class="tab-group">
+      <button class="tab active" onclick="showView('student', this)">학생용</button>
+      <button class="tab" onclick="showView('teacher', this)">교사용</button>
+    </div>
+    <div class="btn-group">
+      <button class="btn" onclick="window.print()">🖨️ 인쇄 (A4)</button>
+      <button class="btn" onclick="downloadHTML()">💾 HTML 저장</button>
+      <button class="btn btn-back" onclick="goBack()">← 처음으로</button>
+    </div>
+  </div>
+  <!-- 반 선택 탭 -->
+  <div class="ban-tab-bar" id="ban-tab-bar"></div>
+
+  <div id="student-view" class="view active">
+    <div id="student-charts"></div>
+  </div>
+  <div id="teacher-view" class="view" style="display:none">
+    <div id="teacher-charts"></div>
+  </div>
+</div>
+
+<script>
+// ── 상태 ──
+let banData    = {};  // { '1반': {headers, rows}, ... }
+let photoMaps  = {};  // { '1반': { 이름: base64 }, ... }
+let currentBan = null;
+let currentView = 'student';
+
+// ── 드래그앤드롭 ──
+function onDragOver(e, id) { e.preventDefault(); document.getElementById(id).classList.add('drag-over'); }
+function onDragLeave(id)   { document.getElementById(id).classList.remove('drag-over'); }
+function onDrop(e, type) {
+  e.preventDefault();
+  const id = type === 'csv' ? 'drop-csv' : 'drop-xlsx';
+  document.getElementById(id).classList.remove('drag-over');
+  if (e.dataTransfer.files.length) loadFiles(e.dataTransfer.files, type);
+}
+
+function loadFiles(fileList, type) {
+  for (const file of fileList) {
+    if (type === 'csv')  loadCSV(file);
+    if (type === 'xlsx') loadXLSX(file);
+  }
+}
+
+// ── CSV 파싱 ──
+function parseCSVText(text) {
+  const lines = text.trim().split(/\r?\n/);
+  const delim = lines[0].includes('\t') ? '\t' : ',';
+  function splitLine(line) {
+    if (delim === '\t') return line.split('\t').map(c => c.replace(/^"|"$/g,'').trim());
+    const cols = []; let cur = '', inQ = false;
+    for (const c of line) {
+      if (c === '"') { inQ = !inQ; continue; }
+      if (c === ',' && !inQ) { cols.push(cur.trim()); cur = ''; continue; }
+      cur += c;
+    }
+    cols.push(cur.trim());
+    return cols;
+  }
+  const headers = splitLine(lines[0]).map(h => h.replace(/^"|"$/g,'').trim());
+  const rows = lines.slice(1).filter(l => l.trim()).map(line => {
+    const cols = splitLine(line);
+    const obj = {};
+    headers.forEach((h, i) => obj[h] = (cols[i] ?? '').replace(/^"|"$/g,'').trim());
+    return obj;
+  });
+  return { headers, rows };
+}
+
+function loadCSV(file) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = parseCSVText(e.target.result);
+      const banKey  = data.headers.find(h => /^반$/.test(h));
+      const seatKey = data.headers.find(h => /좌석/.test(h));
+      const nameKey = data.headers.find(h => /이름/.test(h));
+      if (!seatKey || !nameKey) throw new Error('좌석번호 또는 이름 컬럼 없음');
+
+      // 반 이름: 데이터에서 추출, 없으면 파일명에서
+      let banName = '';
+      if (banKey) {
+        const bans = [...new Set(data.rows.map(r => r[banKey]).filter(Boolean))];
+        if (bans.length) banName = bans[0] + '반';
+      }
+      if (!banName) {
+        const m = file.name.match(/(\d+반)/);
+        banName = m ? m[1] : file.name.replace('.csv','');
+      }
+
+      banData[banName] = data;
+      addChip('csv-file-list', banName, `${banName} — ${data.rows.length}명`);
+      document.getElementById('drop-csv').classList.add('loaded');
+      checkReady();
+    } catch(err) {
+      addChip('csv-file-list', file.name, file.name + ': ' + err.message, true);
+    }
+  };
+  reader.readAsText(file, 'UTF-8');
+}
+
+// ── XLSX 파싱 ── (extractPhotosFromXLSX 구버전 제거됨)
+
+// ZIP 파서 (Central Directory 기반 - data descriptor 문제 해결)
+function parseZip(data) { return {}; } // 동기 버전 미사용
+
+function decodeUTF8(bytes) {
+  try { return new TextDecoder('utf-8').decode(bytes); } catch(e) { return ''; }
+}
+
+// XLSX를 Blob URL로 async 파싱
+async function extractPhotosFromXLSXAsync(arrayBuffer) {
+  const uint8 = new Uint8Array(arrayBuffer);
+  const files = await parseZipAsync(uint8);
+
+  // ── sharedStrings: <si> 단위로 정확히 파싱 ──
+  const sharedXML = decodeUTF8(files['xl/sharedStrings.xml'] || new Uint8Array());
+  const strings = [...sharedXML.matchAll(/<si>([\s\S]*?)<\/si>/g)].map(m =>
+    [...m[1].matchAll(/<t[^>]*>([^<]*)<\/t>/g)].map(t => t[1]).join('').trim()
+  );
+
+  // ── sheet1.xml: 셀 좌표 → 이름 매핑 ──
+  const sheetXML = decodeUTF8(files['xl/worksheets/sheet1.xml'] || new Uint8Array());
+  const colToNum = s => [...s].reduce((n, c) => n * 26 + c.charCodeAt(0) - 64, 0);
+  const cellNameMap = {}; // "col,row" → name
+  for (const m of sheetXML.matchAll(/<c r="([^"]+)" [^>]*t="s"[^>]*><v>(\d+)<\/v>/g)) {
+    const val = strings[+m[2]] || '';
+    const nm  = val.match(/\d+번\s+(.+)/);
+    if (!nm) continue;
+    const coord = m[1].match(/([A-Z]+)(\d+)/);
+    if (!coord) continue;
+    cellNameMap[`${colToNum(coord[1])},${+coord[2]}`] = nm[1].trim();
+  }
+
+  // ── drawing.xml: 이미지 anchor 추출 ──
+  const drawingXML = decodeUTF8(files['xl/drawings/drawing1.xml'] || new Uint8Array());
+  const relsXML    = decodeUTF8(files['xl/drawings/_rels/drawing1.xml.rels'] || new Uint8Array());
+  const ridMap = {};
+  for (const m of relsXML.matchAll(/Id="(rId\d+)"[^/]*Target="([^"]+)"/g))
+    ridMap[m[1]] = m[2].replace('../media/', '');
+
+  const imgList = [];
+  for (const a of drawingXML.matchAll(/<xdr:(?:two|one)CellAnchor[^>]*>([\s\S]*?)<\/xdr:(?:two|one)CellAnchor>/g)) {
+    const fromM = a[1].match(/<xdr:from>[\s\S]*?<xdr:col>(\d+)<\/xdr:col>[\s\S]*?<xdr:row>(\d+)<\/xdr:row>/);
+    const ridM  = a[1].match(/r:embed="(rId\d+)"/);
+    if (fromM && ridM)
+      // anchor는 0-indexed → +1로 Excel 1-indexed 좌표 변환
+      imgList.push({ col: +fromM[1] + 1, row: +fromM[2] + 1, file: ridMap[ridM[1]] || '' });
+  }
+
+  // ── 이미지 anchor → 인근 이름 셀 최근접 매핑 ──
+  const photoMap = {};
+  for (const img of imgList) {
+    if (!img.file) continue;
+    let bestName = null, bestDist = 999;
+    for (const [key, name] of Object.entries(cellNameMap)) {
+      const [c, r] = key.split(',').map(Number);
+      const dist = Math.abs(c - img.col) + Math.abs(r - img.row) * 3;
+      if (dist < bestDist) { bestDist = dist; bestName = name; }
+    }
+    if (!bestName || bestDist > 20) continue;
+    const imgBytes = files[`xl/media/${img.file}`];
+    if (!imgBytes) continue;
+    const ext  = img.file.split('.').pop().toLowerCase();
+    const mime = ext === 'png' ? 'image/png' : 'image/jpeg';
+    photoMap[bestName] = `data:${mime};base64,${uint8ToBase64(imgBytes)}`;
+  }
+  return { photoMap };
+}
+
+function uint8ToBase64(bytes) {
+  let bin = '';
+  const chunk = 8192;
+  for (let i = 0; i < bytes.length; i += chunk)
+    bin += String.fromCharCode(...bytes.slice(i, i + chunk));
+  return btoa(bin);
+}
+
+// ZIP 파서 - Central Directory 기반 (data descriptor 문제 해결)
+async function parseZipAsync(data) {
+  const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+  const files = {};
+
+  // 1. End of Central Directory 찾기 (끝에서 역방향 탐색)
+  let eocdPos = -1;
+  for (let i = data.length - 22; i >= 0; i--) {
+    if (view.getUint32(i, true) === 0x06054b50) { eocdPos = i; break; }
+  }
+  if (eocdPos < 0) throw new Error('ZIP EOCD not found');
+
+  const cdOffset   = view.getUint32(eocdPos + 16, true);
+  const numEntries = view.getUint16(eocdPos + 10, true);
+
+  // 2. Central Directory 파싱
+  const entries = [];
+  let cdPos = cdOffset;
+  for (let i = 0; i < numEntries; i++) {
+    if (view.getUint32(cdPos, true) !== 0x02014b50) break;
+    const compSize      = view.getUint32(cdPos + 20, true);
+    const uncompSize    = view.getUint32(cdPos + 24, true);
+    const fnLen         = view.getUint16(cdPos + 28, true);
+    const extraLen      = view.getUint16(cdPos + 30, true);
+    const commentLen    = view.getUint16(cdPos + 32, true);
+    const localOffset   = view.getUint32(cdPos + 42, true);
+    const fileName      = decodeUTF8(data.slice(cdPos + 46, cdPos + 46 + fnLen));
+    entries.push({ fileName, compSize, uncompSize, localOffset });
+    cdPos += 46 + fnLen + extraLen + commentLen;
+  }
+
+  // 3. 각 엔트리의 로컬 헤더에서 실제 데이터 위치 계산 후 디압축
+  const promises = entries.map(async ({ fileName, compSize, uncompSize, localOffset }) => {
+    if (view.getUint32(localOffset, true) !== 0x04034b50) return;
+    const compMethod = view.getUint16(localOffset + 8, true);
+    const fnLen2     = view.getUint16(localOffset + 26, true);
+    const extraLen2  = view.getUint16(localOffset + 28, true);
+    const dataStart  = localOffset + 30 + fnLen2 + extraLen2;
+    const compData   = data.slice(dataStart, dataStart + compSize);
+
+    if (compMethod === 0) {
+      files[fileName] = compData;
+    } else if (compMethod === 8) {
+      try {
+        const ds = new DecompressionStream('deflate-raw');
+        const writer = ds.writable.getWriter();
+        writer.write(compData);
+        writer.close();
+        const chunks = [];
+        const reader = ds.readable.getReader();
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          chunks.push(value);
+        }
+        const total = chunks.reduce((s, c) => s + c.length, 0);
+        const out = new Uint8Array(total);
+        let off = 0;
+        for (const c of chunks) { out.set(c, off); off += c.length; }
+        files[fileName] = out;
+      } catch(e) { /* skip */ }
+    }
+  });
+
+  await Promise.all(promises);
+  return files;
+}
+
+function loadXLSX(file) {
+  const m = file.name.match(/(\d+반)/);
+  const banName = m ? m[1] : file.name.replace('.xlsx','');
+  addChip('xlsx-file-list', banName + '_loading', banName + ' 읽는 중...');
+
+  const reader = new FileReader();
+  reader.onload = async e => {
+    try {
+      const { photoMap: pm } = await extractPhotosFromXLSXAsync(new Uint8Array(e.target.result));
+      photoMaps[banName] = pm;
+      removeChip('xlsx-file-list', banName + '_loading');
+      addChip('xlsx-file-list', banName, `${banName} — 사진 ${Object.keys(pm).length}명`);
+      document.getElementById('drop-xlsx').classList.add('loaded');
+    } catch(err) {
+      removeChip('xlsx-file-list', banName + '_loading');
+      addChip('xlsx-file-list', banName, banName + ': ' + err.message, true);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function addChip(listId, key, label, isError = false) {
+  removeChip(listId, key);
+  const list = document.getElementById(listId);
+  const chip = document.createElement('div');
+  chip.className = 'file-chip';
+  chip.dataset.key = key;
+  chip.textContent = label;
+  if (isError) { chip.style.background = 'rgba(224,49,49,.1)'; chip.style.color = '#e03131'; }
+  list.appendChild(chip);
+}
+
+function removeChip(listId, key) {
+  const list = document.getElementById(listId);
+  const existing = list.querySelector(`[data-key="${key}"]`);
+  if (existing) existing.remove();
+}
+
+function checkReady() {
+  document.getElementById('generate-btn').classList.toggle('ready', Object.keys(banData).length > 0);
+}
+
+// ── 배치도 생성 ──
+function generate() {
+  if (!Object.keys(banData).length) return;
+
+  // 반 목록 정렬
+  const bans = Object.keys(banData).sort();
+  currentBan = bans[0];
+
+  // 반 탭 생성
+  const tabBar = document.getElementById('ban-tab-bar');
+  tabBar.innerHTML = bans.map((ban, i) =>
+    `<button class="ban-tab${i===0?' active':''}" onclick="switchBan('${ban}',this)">${ban}</button>`
+  ).join('');
+  tabBar.style.display = bans.length > 1 ? 'flex' : 'none';
+
+  // 각 반 차트 렌더
+  const sc = document.getElementById('student-charts');
+  const tc = document.getElementById('teacher-charts');
+  sc.innerHTML = '';
+  tc.innerHTML = '';
+
+  bans.forEach((ban, i) => {
+    const seats   = buildSeats(banData[ban]);
+    const photoMap = photoMaps[ban] || {};
+    const sDiv = document.createElement('div');
+    sDiv.className = 'chart-container ban-chart';
+    sDiv.dataset.ban = ban;
+    sDiv.style.display = i === 0 ? '' : 'none';
+    sDiv.innerHTML = buildStudentChart(seats, ban);
+    sc.appendChild(sDiv);
+
+    const tDiv = document.createElement('div');
+    tDiv.className = 'chart-container ban-chart';
+    tDiv.dataset.ban = ban;
+    tDiv.style.display = 'none'; // 교사용은 showView로 제어
+    tDiv.innerHTML = buildTeacherChart(seats, ban, photoMap);
+    tc.appendChild(tDiv);
+  });
+
+  document.getElementById('upload-screen').style.display = 'none';
+  document.getElementById('print-screen').style.display  = 'block';
+}
+
+function buildSeats(data) {
+  const headers = data.headers;
+  const rows    = data.rows;
+  const seatKey = headers.find(h => /좌석/.test(h));
+  const nameKey = headers.find(h => /이름/.test(h));
+  const numKey  = headers.find(h => /번호/.test(h)) || null;
+  const seats   = {};
+  rows.forEach(r => {
+    const sn = parseInt(r[seatKey]);
+    if (!sn || !r[nameKey]) return;
+    seats[sn] = { name: r[nameKey], num: numKey ? (r[numKey] || '') : '' };
+  });
+  return seats;
+}
+
+function buildStudentChart(seats, banStr) {
+  const rows = [];
+  for (let r = 1; r <= 5; r++) {
+    const sns = Array.from({length:6}, (_, i) => (r-1)*6 + i + 1);
+    rows.push(`<div class="seat-row">
+      <div class="pair">${seatS(sns[0],seats)}${seatS(sns[1],seats)}</div>
+      <div class="aisle"></div>
+      <div class="pair">${seatS(sns[2],seats)}${seatS(sns[3],seats)}</div>
+      <div class="aisle"></div>
+      <div class="pair">${seatS(sns[4],seats)}${seatS(sns[5],seats)}</div>
+    </div>`);
+  }
+  return `<div class="chart-title"><h2>${banStr} 자리 배치도</h2><p>학생용</p></div>
+    <div class="blackboard">▲ 교탁 / 칠판 (앞)</div>
+    <div class="seat-grid">${rows.join('')}</div>
+    <div class="back-label">▼ 뒤</div>`;
+}
+
+function buildTeacherChart(seats, banStr, photoMap) {
+  const rows = [];
+  for (let r = 5; r >= 1; r--) {
+    const sns = Array.from({length:6}, (_, i) => (r-1)*6 + i + 1).reverse();
+    rows.push(`<div class="seat-row">
+      <div class="pair">${seatT(sns[0],seats,photoMap)}${seatT(sns[1],seats,photoMap)}</div>
+      <div class="aisle"></div>
+      <div class="pair">${seatT(sns[2],seats,photoMap)}${seatT(sns[3],seats,photoMap)}</div>
+      <div class="aisle"></div>
+      <div class="pair">${seatT(sns[4],seats,photoMap)}${seatT(sns[5],seats,photoMap)}</div>
+    </div>`);
+  }
+  return `<div class="chart-title"><h2>${banStr} 자리 배치도</h2><p>교사용 — 교탁에서 바라보는 방향</p></div>
+    <div class="seat-grid">${rows.join('')}</div>
+    <div class="blackboard">▼ 교탁 / 칠판</div>`;
+}
+
+function seatS(sn, seats) {
+  if (!seats[sn]) return `<div class="seat-student empty"><span class="sn">${sn}</span><span class="empty-lbl">빈자리</span></div>`;
+  const s = seats[sn];
+  const numLabel = s.num ? `<span class="snum">${s.num}번</span>` : '';
+  return `<div class="seat-student"><span class="sn">${sn}</span>${numLabel}<span class="sname">${s.name}</span></div>`;
+}
+
+function seatT(sn, seats, photoMap) {
+  if (!seats[sn]) return `<div class="seat-teacher empty"><span class="sn">${sn}</span><span class="empty-lbl">빈자리</span></div>`;
+  const s = seats[sn];
+  const photo = photoMap[s.name] || '';
+  const ph = photo
+    ? `<img src="${photo}" class="sphoto" alt="${s.name}">`
+    : `<div class="nophoto">사진없음</div>`;
+  const numLabel = s.num ? `<span class="snum">${s.num}번</span>` : '';
+  return `<div class="seat-teacher"><span class="sn">${sn}</span>${ph}${numLabel}<span class="sname">${s.name}</span></div>`;
+}
+
+// ── 반 전환 ──
+function switchBan(ban, btn) {
+  currentBan = ban;
+  document.querySelectorAll('.ban-tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  // 현재 view의 차트만 해당 반 표시
+  ['student-charts', 'teacher-charts'].forEach(cid => {
+    document.querySelectorAll(`#${cid} .ban-chart`).forEach(d => {
+      d.style.display = d.dataset.ban === ban ? '' : 'none';
+    });
+  });
+}
+
+// ── 학생용/교사용 탭 전환 ──
+function showView(view, btn) {
+  currentView = view;
+  document.querySelectorAll('.view').forEach(v => { v.classList.remove('active'); v.style.display = 'none'; });
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  const viewEl = document.getElementById(view + '-view');
+  viewEl.classList.add('active');
+  viewEl.style.display = 'block';
+  btn.classList.add('active');
+  // 교사용으로 전환 시 현재 반 차트 표시
+  if (view === 'teacher') {
+    document.querySelectorAll('#teacher-charts .ban-chart').forEach(d => {
+      d.style.display = d.dataset.ban === currentBan ? '' : 'none';
+    });
+  }
+}
+
+function downloadHTML() {
+  // 현재 렌더된 전체 HTML을 그대로 저장
+  const html = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  const bans = Object.keys(banData).sort().join('_') || '배치도';
+  const today = new Date().toISOString().slice(0,10).replace(/-/g,'');
+  a.href = url;
+  a.download = `자리배치도_${bans}_${today}.html`;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(url); document.body.removeChild(a); }, 500);
+}
+
+function goBack() {
+  document.getElementById('print-screen').style.display  = 'none';
+  document.getElementById('upload-screen').style.display = 'flex';
+  banData = {}; photoMaps = {}; currentBan = null;
+  document.getElementById('csv-file-list').innerHTML  = '';
+  document.getElementById('xlsx-file-list').innerHTML = '';
+  document.getElementById('drop-csv').classList.remove('loaded');
+  document.getElementById('drop-xlsx').classList.remove('loaded');
+  document.getElementById('generate-btn').classList.remove('ready');
+}
+</script>
+</body>
+</html>
